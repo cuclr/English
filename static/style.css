@@ -177,39 +177,41 @@ small { color: var(--muted); }
 .empty-day, .empty-state { color: var(--muted); }
 .empty-state { text-align: center; }
 
-.study-page { width: min(760px, calc(100% - 32px)); }
-.study-nav { display: flex; justify-content: space-between; margin-bottom: 48px; color: var(--muted); }
+.study-page { width: min(860px, calc(100% - 32px)); padding-top: 24px; padding-bottom: 40px; }
+.study-nav { display: flex; justify-content: space-between; margin-bottom: 16px; color: var(--muted); font-size: 14px; }
 .study-header { text-align: center; }
-.study-header h1 { margin: 7px 0; font-family: Georgia, serif; font-size: clamp(38px, 7vw, 58px); }
-.study-header > p:last-child { color: var(--muted); }
-.study-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 26px 0 18px; }
-.study-stats div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: center; }
+.study-header h1 { margin: 3px 0; font-family: Georgia, serif; font-size: clamp(32px, 5vw, 42px); }
+.study-header > p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+.study-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 10px; }
+.study-stats div { padding: 7px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); text-align: center; }
 .study-stats strong, .study-stats span { display: block; }
-.study-stats strong { color: var(--green-dark); font-size: 24px; }
-.study-stats span { margin-top: 3px; color: var(--muted); font-size: 13px; }
-.progress-track { height: 8px; margin: -8px 0 18px; overflow: hidden; border-radius: 999px; background: #dfe6df; }
+.study-stats strong { color: var(--green-dark); font-size: 20px; line-height: 1.1; }
+.study-stats span { margin-top: 2px; color: var(--muted); font-size: 12px; }
+.progress-track { height: 6px; margin: -2px 0 10px; overflow: hidden; border-radius: 999px; background: #dfe6df; }
 .progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), var(--accent-light)); transition: width .35s ease; }
-.recall-card { padding: clamp(26px, 6vw, 54px); border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: 0 12px 40px rgb(36 48 39 / 8%); text-align: center; }
-.mastery-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; color: var(--muted); font-size: 13px; }
+.recall-card { padding: 20px 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 12px 40px rgb(36 48 39 / 8%); text-align: center; }
+.mastery-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 10px; color: var(--muted); font-size: 13px; }
 .mastery-label { font-weight: 800; }
 .mastery-dots { display: flex; gap: 5px; }
 .mastery-dots i { width: 9px; height: 9px; border-radius: 50%; background: #d9ded9; }
 .mastery-dots i.active { background: var(--green); }
 .recall-label { margin: 0; color: var(--muted); }
-.recall-card h2 { margin: 18px 0 30px; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(42px, 10vw, 76px); }
-.review-meta { margin: -18px 0 28px; color: var(--muted); font-size: 13px; }
-.reveal-button { max-width: 260px; }
-.answer { margin-top: 30px; padding-top: 25px; border-top: 1px solid var(--line); text-align: left; }
-.answer h3 { margin: 22px 0 0; font-size: 15px; }
-.review-actions { margin-top: 28px; }
+.recall-card h2 { margin: 7px 0 10px; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(38px, 7vw, 56px); line-height: 1.05; }
+.review-meta { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.reveal-button { max-width: 240px; min-height: 40px; margin-top: 0; }
+.answer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); text-align: left; }
+.answer .definition { line-height: 1.45; }
+.answer h3 { margin: 10px 0 0; font-size: 14px; }
+.answer .phrases { gap: 3px; margin-top: 6px; line-height: 1.35; }
+.review-actions { margin-top: 14px; }
 .review-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.review-button { transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease; }
+.review-button { min-height: 40px; margin-top: 0; transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease; }
 .review-buttons.has-selection .review-button:not(.is-selected) { opacity: .55; }
 .review-button.is-selected { box-shadow: 0 0 0 3px var(--card), 0 0 0 6px rgb(var(--accent-rgb) / 34%); transform: translateY(-2px); }
-.review-confirmation { margin-top: 18px; padding: 14px; border: 1px solid var(--accent-border); border-radius: 12px; background: var(--accent-surface); text-align: center; }
-.review-confirmation p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.review-confirmation { margin-top: 10px; padding: 9px 12px; border: 1px solid var(--accent-border); border-radius: 10px; background: var(--accent-surface); text-align: center; }
+.review-confirmation p { margin: 0 0 7px; color: var(--muted); font-size: 13px; }
 .review-confirmation strong { color: var(--green-dark); }
-.confirm-review-button { max-width: 320px; margin: 0; }
+.confirm-review-button { max-width: 300px; min-height: 40px; margin: 0; }
 .again-button { background: #a7473f; }
 .again-button:hover { background: #85352f; }
 .vague-button { background: #b47a35; }
@@ -302,12 +304,12 @@ small { color: var(--muted); }
     .hero h1 { font-size: 43px; }
     .hero-links { width: 100%; justify-content: space-between; }
     .section-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
-    .study-nav { gap: 12px; margin-bottom: 30px; }
+    .study-nav { gap: 12px; margin-bottom: 16px; }
     .study-nav > * { min-width: 0; overflow-wrap: anywhere; }
     .study-stats { gap: 6px; }
     .study-stats div { padding: 10px 5px; }
     .study-stats strong { font-size: 20px; }
-    .recall-card { padding: 22px 16px; border-radius: 16px; }
+    .recall-card { padding: 18px 14px; border-radius: 16px; }
     .recall-card h2 { overflow-wrap: anywhere; }
     .mastery-row { align-items: flex-start; }
     .review-actions button { min-height: 50px; }

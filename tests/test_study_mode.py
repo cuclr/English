@@ -7,6 +7,9 @@ import unittest
 import app as vocabulary_app
 
 
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+
+
 class StudyModeTest(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -74,6 +77,15 @@ class StudyModeTest(unittest.TestCase):
         self.assertIn("revealAnswer();", html)
         self.assertIn("如果判断有误，可以重新选择", html)
         self.assertIn("确认并进入下一个", html)
+
+    def test_study_page_uses_compact_layout(self):
+        css = (PROJECT_DIR / "static" / "style.css").read_text(encoding="utf-8")
+
+        self.assertIn(".study-page { width: min(860px", css)
+        self.assertIn("padding-top: 24px; padding-bottom: 40px", css)
+        self.assertIn(".recall-card { padding: 20px 24px", css)
+        self.assertIn(".answer { margin-top: 12px; padding-top: 12px", css)
+        self.assertIn(".review-actions { margin-top: 14px; }", css)
 
     def test_review_is_saved(self):
         response = self.client.post(
