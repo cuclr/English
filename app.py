@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 import sqlite3
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 
 from pdf_search import PdfSearchError, PdfSearcher, find_vocabulary_pdf
 
@@ -110,6 +110,12 @@ def index():
             """
         ).fetchall()
 
+    available_day_ids = {day["id"] for day in days}
+    selected_day_id = session.get("selected_day_id")
+    if selected_day_id not in available_day_ids:
+        selected_day_id = days[0]["id"] if days else None
+        session["selected_day_id"] = selected_day_id
+
     words_by_day: dict[int, list[sqlite3.Row]] = {}
     for word in words:
         item = dict(word)
@@ -119,7 +125,12 @@ def index():
             item["phrases"] = []
         words_by_day.setdefault(item["study_day_id"], []).append(item)
 
-    return render_template("index.html", days=days, words_by_day=words_by_day)
+    return render_template(
+        "index.html",
+        days=days,
+        words_by_day=words_by_day,
+        selected_day_id=selected_day_id,
+    )
 
 
 @app.post("/days")
@@ -131,9 +142,10 @@ def create_day():
 
     try:
         with get_db() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 "INSERT INTO study_days (study_date) VALUES (?)", (study_date,)
             )
+            session["selected_day_id"] = cursor.lastrowid
     except sqlite3.IntegrityError:
         flash("这个学习日期已经存在。", "error")
     else:
@@ -151,6 +163,8 @@ def add_word():
         flash("请选择日期并填写单词。", "error")
         return redirect(url_for("index"))
 
+    session["selected_day_id"] = study_day_id
+
     try:
         entry = get_pdf_searcher().search(word)
     except ValueError as exc:
@@ -161,7 +175,7 @@ def add_word():
         return redirect(url_for("index"))
 
     if entry is None:
-        flash(f"词书中没有找到：{word}", "error")
+        flash(f"没有在词库中找到“{word}”，请检查拼写后重试。", "error")
         return redirect(url_for("index"))
 
     try:
@@ -210,6 +224,40 @@ def add_word():
     else:
         flash(f"已保存：{entry.word}", "success")
 
+    return redirect(url_for("index"))
+
+
+@app.post("/preferences/study-day")
+def select_study_day():
+    study_day_id = request.form.get("study_day_id", type=int)
+    if not study_day_id:
+        return "学习日期无效。", 400
+
+    with get_db() as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM study_days WHERE id = ?", (study_day_id,)
+        ).fetchone()
+    if exists is None:
+        return "学习日期不存在。", 404
+
+    session["selected_day_id"] = study_day_id
+    return "", 204
+
+
+@app.post("/words/<int:word_id>/delete")
+def delete_word(word_id: int):
+    with get_db() as connection:
+        word = connection.execute(
+            "SELECT word, study_day_id FROM words WHERE id = ?", (word_id,)
+        ).fetchone()
+        if word is None:
+            flash("要删除的单词不存在。", "error")
+            return redirect(url_for("index"))
+
+        connection.execute("DELETE FROM words WHERE id = ?", (word_id,))
+
+    session["selected_day_id"] = word["study_day_id"]
+    flash(f"已删除：{word['word']}", "success")
     return redirect(url_for("index"))
 
 

@@ -16,7 +16,7 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <section class="messages" aria-live="polite">
+                <section class="messages" aria-live="polite" aria-atomic="true">
                     {% for category, message in messages %}
                         <p class="message {{ category }}">{{ message }}</p>
                     {% endfor %}
@@ -38,7 +38,7 @@
                 <select id="study_day_id" name="study_day_id" required {% if not days %}disabled{% endif %}>
                     <option value="">请选择日期</option>
                     {% for day in days %}
-                        <option value="{{ day.id }}">{{ day.study_date }}</option>
+                        <option value="{{ day.id }}" {% if day.id == selected_day_id %}selected{% endif %}>{{ day.study_date }}</option>
                     {% endfor %}
                 </select>
 
@@ -75,9 +75,12 @@
                             {% if day_words %}
                                 <div class="word-list">
                                     {% for item in day_words %}
-                                        <section class="word-entry">
+                                        <section class="word-entry" style="--card-index: {{ loop.index0 }}">
                                             <div class="word-heading">
                                                 <h4>{{ item.word }}</h4>
+                                                <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
+                                                    <button class="delete-button" type="submit" aria-label="删除 {{ item.word }}">删除</button>
+                                                </form>
                                             </div>
                                             {% if item.definition %}<p class="definition">{{ item.definition }}</p>{% endif %}
                                             {% if item.phrases %}
@@ -101,5 +104,32 @@
             {% endif %}
         </section>
     </main>
+
+    <script>
+        const daySelect = document.querySelector('#study_day_id');
+        daySelect?.addEventListener('change', () => {
+            if (!daySelect.value) return;
+            const body = new URLSearchParams({ study_day_id: daySelect.value });
+            fetch('{{ url_for("select_study_day") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body
+            });
+        });
+
+        document.querySelectorAll('.delete-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const confirmed = window.confirm(`确定删除“${form.dataset.word}”吗？相关学习记录也会一并删除。`);
+                if (!confirmed) event.preventDefault();
+            });
+        });
+
+        document.querySelectorAll('.message').forEach((message) => {
+            window.setTimeout(() => {
+                message.classList.add('message-leaving');
+                message.addEventListener('animationend', () => message.remove(), { once: true });
+            }, 4500);
+        });
+    </script>
 </body>
 </html>
