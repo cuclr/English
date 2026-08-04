@@ -20,6 +20,8 @@ _OCR_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z'_~:!-]*$")
 _OCR_GAP_RE = re.compile(r"[_~:!]+")
 _MIN_HEADING_HEIGHT = 11.5
 _HEADING_ROW_TOLERANCE = 12
+_MAX_HEADING_FRAGMENT_GAP = 3
+_MAX_HEADING_FRAGMENTS = 4
 _CJK_RE = re.compile(r"[\u3400-\u9fff]")
 _BRACKET_RE = re.compile(r"[\[［].*?[\]］]")
 
@@ -121,7 +123,7 @@ class PdfSearcher:
         ]
 
         definition = self._extract_definition(
-            entry_words, str(heading["word"]), heading["top"]
+            entry_words, heading["top"], heading["right"]
         )
         phrase_sections = [
             (entry_words, heading["bottom"] + 4, page.rect.width)
@@ -164,27 +166,59 @@ class PdfSearcher:
 
     @staticmethod
     def _find_headings(words: list[tuple]) -> list[dict[str, float | str]]:
-        """Find entry headings by the word followed by a phonetic bracket."""
+        """Find entry headings, joining OCR-split fragments before phonetics."""
         headings: list[dict[str, float | str]] = []
-        for index, item in enumerate(words):
-            text = item[4].strip().lower()
+        index = 0
+        while index < len(words):
+            item = words[index]
+            fragments = [item]
+            last_index = index
+            for candidate_index in range(
+                index + 1,
+                min(index + _MAX_HEADING_FRAGMENTS, len(words)),
+            ):
+                candidate = words[candidate_index]
+                previous = fragments[-1]
+                horizontal_gap = candidate[0] - previous[2]
+                same_text_line = (
+                    candidate[5] == item[5]
+                    and candidate[6] == item[6]
+                    and abs(candidate[1] - previous[1]) <= 4
+                )
+                candidate_text = candidate[4].strip().lower()
+                if (
+                    not same_text_line
+                    or not -2 <= horizontal_gap <= _MAX_HEADING_FRAGMENT_GAP
+                    or not _OCR_HEADING_RE.fullmatch(candidate_text)
+                ):
+                    break
+                fragments.append(candidate)
+                last_index = candidate_index
+
+            text = "".join(fragment[4].strip() for fragment in fragments).lower()
             if not _OCR_HEADING_RE.fullmatch(text):
+                index += 1
                 continue
             letter_count = sum(character.isalpha() for character in text)
             has_ocr_gap = bool(_OCR_GAP_RE.search(text))
             if letter_count < 3 or (has_ocr_gap and item[0] > 130):
+                index += 1
                 continue
-            nearby = words[index + 1 : index + 8]
+            right = max(fragment[2] for fragment in fragments)
+            top = min(fragment[1] for fragment in fragments)
+            bottom = max(fragment[3] for fragment in fragments)
+            nearby = words[last_index + 1 : last_index + 8]
             phonetic_candidates = [
                 candidate
                 for candidate in nearby
-                if candidate[0] > item[0]
-                and abs(candidate[1] - item[1]) <= _HEADING_ROW_TOLERANCE
+                if candidate[0] > right
+                and abs(candidate[1] - top) <= _HEADING_ROW_TOLERANCE
                 and ("[" in candidate[4] or "［" in candidate[4])
             ]
             if not phonetic_candidates:
+                index += 1
                 continue
-            heading_height = item[3] - item[1]
+            heading_height = bottom - top
             phonetic_height = max(
                 candidate[3] - candidate[1]
                 for candidate in phonetic_candidates
@@ -194,14 +228,17 @@ class PdfSearcher:
                 or (heading_height >= _MIN_HEADING_HEIGHT and item[0] <= 110)
             )
             if not looks_like_display_text:
+                index += 1
                 continue
             headings.append(
                 {
                     "word": text,
-                    "top": item[1],
-                    "bottom": item[3],
+                    "top": top,
+                    "bottom": bottom,
+                    "right": right,
                 }
             )
+            index = last_index + 1
         return headings
 
     @staticmethod
@@ -259,20 +296,14 @@ class PdfSearcher:
         return previous[-1]
 
     @staticmethod
-    def _extract_definition(words: list[tuple], heading_word: str, top: float) -> str:
+    def _extract_definition(words: list[tuple], top: float, right: float) -> str:
         heading_words = [
             item
             for item in words
             if abs(item[1] - top) <= _HEADING_ROW_TOLERANCE
+            and item[0] >= right - 1
         ]
         heading_text = " ".join(item[4] for item in sorted(heading_words, key=lambda x: x[0]))
-        heading_text = re.sub(
-            rf"^.*?{re.escape(heading_word)}",
-            "",
-            heading_text,
-            count=1,
-            flags=re.I,
-        )
         heading_text = _BRACKET_RE.sub("", heading_text, count=1)
         return " ".join(heading_text.split()).strip(" -_~:!")
 

@@ -295,3 +295,25 @@
 ### Removed
 
 - 无。
+
+## 2026-08-04
+
+### Added
+
+- 新增 PDF 分裂词头回归测试，覆盖 `junior` 的 `jun` / `ior` 文本块结构。
+- 新增整本词书分裂词头扫描与代表性实际查询验证。
+
+### Changed
+
+- 词头识别会受限合并同一 PDF 文本行中间距极小的连续英文片段。
+- 释义改为从合并后词头的右侧坐标开始提取，避免分裂词头残留在释义中。
+- README 增加分裂词头容错说明。
+
+### Fixed
+
+- 修复 `junior` 因隐藏文本被拆成 `jun` 和 `ior` 而无法录入的问题。
+- 同步修复 `ingredient`、`convenient`、`genuine`、`paradise`、`premise`、`restrain`、`extraordinary`、`admire`、`diamond` 等同类漏词。
+
+### Removed
+
+- 无。

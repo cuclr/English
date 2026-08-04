@@ -83,6 +83,14 @@ class PdfSearchTest(unittest.TestCase):
 
         self.assertIsNone(entry)
 
+    def test_split_heading_fragments_are_joined(self):
+        entry = self.searcher.search("junior")
+
+        self.assertIsNotNone(entry)
+        self.assertIn("初级", entry.definition)
+        self.assertNotIn("jun ior", entry.definition.lower())
+        self.assertTrue(any("初级研究者" in phrase for phrase in entry.phrases))
+
 
 if __name__ == "__main__":
     unittest.main()
