@@ -5,7 +5,8 @@ import sqlite3
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 
-from pdf_search import PdfSearchError, PdfSearcher, find_vocabulary_pdf
+from book_manager import BookManager, BookManagerError
+from pdf_search import PdfSearchError, PdfSearcher
 from spaced_repetition import (
     calculate_review_update,
     choose_weighted_word,
@@ -18,7 +19,9 @@ DATABASE = BASE_DIR / "instance" / "vocabulary.db"
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-only-change-me"
+book_manager = BookManager(BASE_DIR)
 _pdf_searcher: PdfSearcher | None = None
+_pdf_searcher_path: Path | None = None
 
 
 class DatabaseConnection(sqlite3.Connection):
@@ -119,9 +122,13 @@ def init_db() -> None:
 
 
 def get_pdf_searcher() -> PdfSearcher:
-    global _pdf_searcher
-    if _pdf_searcher is None:
-        _pdf_searcher = PdfSearcher(find_vocabulary_pdf(BASE_DIR))
+    global _pdf_searcher, _pdf_searcher_path
+    active_book = book_manager.active_book()
+    if active_book is None:
+        raise PdfSearchError("当前没有可用词书，请先在设置中添加 PDF 词书。")
+    if _pdf_searcher is None or _pdf_searcher_path != active_book.path:
+        _pdf_searcher = PdfSearcher(active_book.path)
+        _pdf_searcher_path = active_book.path
     return _pdf_searcher
 
 
@@ -197,7 +204,61 @@ def index():
         active_day=active_day,
         active_words=active_words,
         days_count=days_count,
+        active_book=book_manager.active_book(),
     )
+
+
+@app.route("/settings")
+def settings_page():
+    books = book_manager.list_books()
+    active_book = book_manager.active_book()
+    with get_db() as connection:
+        word_count = connection.execute("SELECT COUNT(*) FROM words").fetchone()[0]
+        review_count = connection.execute(
+            "SELECT COUNT(*) FROM learning_records"
+        ).fetchone()[0]
+    return render_template(
+        "settings.html",
+        books=books,
+        active_book=active_book,
+        word_count=word_count,
+        review_count=review_count,
+    )
+
+
+@app.post("/settings/book")
+def select_book():
+    global _pdf_searcher, _pdf_searcher_path
+    book_key = request.form.get("book_key", "")
+    try:
+        selected = book_manager.select_book(book_key)
+    except BookManagerError as exc:
+        flash(str(exc), "error")
+    else:
+        _pdf_searcher = None
+        _pdf_searcher_path = None
+        flash(f"当前词书已切换为：{selected.name}", "success")
+    return redirect(url_for("settings_page"))
+
+
+@app.post("/review/reset")
+def reset_review_progress():
+    today = date.today().isoformat()
+    with get_db() as connection:
+        connection.execute("DELETE FROM learning_records")
+        connection.execute(
+            """
+            UPDATE words
+            SET level = 1,
+                correct_count = 0,
+                wrong_count = 0,
+                last_reviewed = NULL,
+                next_review_date = ?
+            """,
+            (today,),
+        )
+    flash("全部复习进度已重置，单词和日期仍然保留。", "success")
+    return redirect(url_for("settings_page"))
 
 
 @app.route("/dates")

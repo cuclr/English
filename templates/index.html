@@ -11,7 +11,10 @@
         <header class="hero">
             <div class="hero-topline">
                 <p class="eyebrow">VOCABULARY NOTEBOOK</p>
-                <a class="text-link" href="{{ url_for('date_library') }}">切换日期与查看全部词库 →</a>
+                <div class="hero-links">
+                    <a class="text-link" href="{{ url_for('date_library') }}">切换日期</a>
+                    <a class="text-link" href="{{ url_for('settings_page') }}">设置</a>
+                </div>
             </div>
             <h1>每日词库</h1>
             {% if active_day %}
@@ -19,6 +22,9 @@
             {% else %}
                 <p>创建第一个学习日期，然后开始添加单词。</p>
             {% endif %}
+            <a class="book-status" href="{{ url_for('settings_page') }}">
+                当前词书：{% if active_book %}{{ active_book.name }}{% else %}尚未设置{% endif %}
+            </a>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}

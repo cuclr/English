@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>设置</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="page settings-page">
+        <nav class="study-nav">
+            <a href="{{ url_for('index') }}">← 返回主界面</a>
+            <span>本地设置</span>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="messages" aria-live="polite" aria-atomic="true">
+                    {% for category, message in messages %}
+                        <p class="message {{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+
+        <header class="settings-header">
+            <p class="eyebrow">SETTINGS</p>
+            <h1>设置</h1>
+            <p>管理本地词书和学习进度。</p>
+        </header>
+
+        <section class="settings-section">
+            <div class="settings-title">
+                <div>
+                    <h2>PDF 词书</h2>
+                    <p>将新词书复制到项目的 <code>books</code> 文件夹，然后刷新此页面。</p>
+                </div>
+                <span class="settings-count">{{ books|length }} 本</span>
+            </div>
+
+            {% if books %}
+                <div class="book-list">
+                    {% for book in books %}
+                        <article class="book-row {% if active_book and book.key == active_book.key %}active{% endif %}">
+                            <div class="book-details">
+                                <strong>{{ book.name }}</strong>
+                                <span>{{ book.key }}</span>
+                            </div>
+                            {% if active_book and book.key == active_book.key %}
+                                <span class="active-book-badge">当前使用</span>
+                            {% else %}
+                                <form method="post" action="{{ url_for('select_book') }}">
+                                    <input type="hidden" name="book_key" value="{{ book.key }}">
+                                    <button class="select-date-button" type="submit">切换到这本</button>
+                                </form>
+                            {% endif %}
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <p>没有找到 PDF 词书。请将文件放入 <code>books</code> 文件夹。</p>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="settings-section danger-section">
+            <div class="settings-title">
+                <div>
+                    <h2>重置复习进度</h2>
+                    <p>共 {{ word_count }} 个单词，已有 {{ review_count }} 条学习记录。</p>
+                </div>
+            </div>
+            <p class="danger-note">重置后所有单词回到 1 级，答对答错次数清零，并从今天重新进入复习队列。单词、日期、释义和词组不会删除。</p>
+            <form id="reset-progress-form" method="post" action="{{ url_for('reset_review_progress') }}">
+                <button class="danger-button" type="submit" {% if not word_count %}disabled{% endif %}>重置全部复习进度</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        const resetForm = document.querySelector('#reset-progress-form');
+        resetForm?.addEventListener('submit', (event) => {
+            const confirmed = window.confirm('确定重置全部复习进度吗？该操作无法撤销。');
+            if (!confirmed) event.preventDefault();
+        });
+    </script>
+</body>
+</html>
