@@ -16,6 +16,8 @@ import fitz
 
 
 _WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
+_OCR_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z'_~:-]*$")
+_OCR_GAP_RE = re.compile(r"[_~:]+")
 _CJK_RE = re.compile(r"[\u3400-\u9fff]")
 _BRACKET_RE = re.compile(r"[\[［].*?[\]］]")
 
@@ -53,7 +55,8 @@ class PdfSearcher:
                     for page_index, page in enumerate(document):
                         # Fast rejection before asking for positioned words.
                         page_text = page.get_text("text").lower()
-                        if query not in page_text:
+                        compact_page_text = re.sub(r"[^a-z]", "", page_text)
+                        if query not in page_text and query not in compact_page_text:
                             continue
                         entry = self._extract_entry(document, page_index, query)
                         if entry is not None:
@@ -72,7 +75,11 @@ class PdfSearcher:
 
         headings = self._find_headings(words)
         target_index = next(
-            (i for i, heading in enumerate(headings) if heading["word"] == query),
+            (
+                i
+                for i, heading in enumerate(headings)
+                if self._heading_matches_query(str(heading["word"]), query)
+            ),
             None,
         )
         if target_index is None:
@@ -88,7 +95,9 @@ class PdfSearcher:
             item for item in words if heading["top"] - 2 <= item[1] < next_y - 2
         ]
 
-        definition = self._extract_definition(entry_words, query, heading["top"])
+        definition = self._extract_definition(
+            entry_words, str(heading["word"]), heading["top"]
+        )
         phrase_sections = [
             (entry_words, heading["bottom"] + 4, page.rect.width)
         ]
@@ -134,7 +143,11 @@ class PdfSearcher:
         headings: list[dict[str, float | str]] = []
         for index, item in enumerate(words):
             text = item[4].strip().lower()
-            if not _WORD_RE.fullmatch(text) or len(text) < 3:
+            if not _OCR_HEADING_RE.fullmatch(text):
+                continue
+            letter_count = sum(character.isalpha() for character in text)
+            has_ocr_gap = bool(_OCR_GAP_RE.search(text))
+            if letter_count < 3 or (has_ocr_gap and item[0] > 130):
                 continue
             nearby = words[index + 1 : index + 8]
             has_phonetic = any(
@@ -154,10 +167,68 @@ class PdfSearcher:
         return headings
 
     @staticmethod
-    def _extract_definition(words: list[tuple], query: str, top: float) -> str:
+    def _heading_matches_query(heading_word: str, query: str) -> bool:
+        """Match a query against headings damaged by the PDF's OCR layer.
+
+        The book occasionally stores visible letters as ``_``, ``~`` or ``:``.
+        Those markers can represent either a separator or a few missing letters.
+        Requiring the complete query to match the resulting pattern keeps this
+        tolerance limited to an already identified entry-heading position.
+        """
+        if heading_word == query:
+            return True
+        pattern_parts: list[str] = []
+        previous_was_gap = False
+        for character in heading_word:
+            if character in "_~:":
+                if not previous_was_gap:
+                    pattern_parts.append(r"[a-z]{0,4}")
+                previous_was_gap = True
+            else:
+                pattern_parts.append(re.escape(character))
+                previous_was_gap = False
+        if re.fullmatch("".join(pattern_parts), query, flags=re.I) is not None:
+            return True
+
+        # Some OCR errors replace a real letter as well as inserting a gap
+        # marker (for example ``insqir::__e`` for ``inspire``). Fuzzy matching
+        # is deliberately restricted to marked headings and at most two edits.
+        if not _OCR_GAP_RE.search(heading_word):
+            return False
+        plain_heading = _OCR_GAP_RE.sub("", heading_word)
+        if abs(len(plain_heading) - len(query)) > 4:
+            return False
+        return PdfSearcher._edit_distance(plain_heading, query) <= 2
+
+    @staticmethod
+    def _edit_distance(left: str, right: str) -> int:
+        """Return the Levenshtein edit distance for two short heading words."""
+        previous = list(range(len(right) + 1))
+        for left_index, left_character in enumerate(left, start=1):
+            current = [left_index]
+            for right_index, right_character in enumerate(right, start=1):
+                current.append(
+                    min(
+                        current[-1] + 1,
+                        previous[right_index] + 1,
+                        previous[right_index - 1]
+                        + (left_character != right_character),
+                    )
+                )
+            previous = current
+        return previous[-1]
+
+    @staticmethod
+    def _extract_definition(words: list[tuple], heading_word: str, top: float) -> str:
         heading_words = [item for item in words if abs(item[1] - top) <= 9]
         heading_text = " ".join(item[4] for item in sorted(heading_words, key=lambda x: x[0]))
-        heading_text = re.sub(rf"^.*?\b{re.escape(query)}\b", "", heading_text, count=1, flags=re.I)
+        heading_text = re.sub(
+            rf"^.*?{re.escape(heading_word)}",
+            "",
+            heading_text,
+            count=1,
+            flags=re.I,
+        )
         heading_text = _BRACKET_RE.sub("", heading_text, count=1)
         return " ".join(heading_text.split()).strip(" -")
 

@@ -19,6 +19,42 @@ class PdfSearchTest(unittest.TestCase):
             any("向某人说明某事" in phrase for phrase in entry.phrases)
         )
 
+    def test_heading_with_ocr_separator_is_found(self):
+        entry = self.searcher.search("atmosphere")
+
+        self.assertIsNotNone(entry)
+        self.assertIn("大气", entry.definition)
+        self.assertNotIn("atmosphe_re", entry.definition)
+        self.assertTrue(any("大气污染" in phrase for phrase in entry.phrases))
+
+    def test_heading_with_ocr_missing_letter_marker_is_found(self):
+        entry = self.searcher.search("scholar")
+
+        self.assertIsNotNone(entry)
+        self.assertIn("学者", entry.definition)
+
+    def test_heading_with_ocr_wrong_letter_is_found(self):
+        entry = self.searcher.search("inspire")
+
+        self.assertIsNotNone(entry)
+        self.assertIn("鼓舞", entry.definition)
+
+    def test_ocr_heading_match_stays_limited(self):
+        matches = {
+            "atmosphere": "atmosphe_re",
+            "transport": "tran~ort",
+            "objective": "obje:ctive",
+            "conquer": "con_guer",
+            "beloved": "beloy_~d",
+        }
+        for query, heading in matches.items():
+            with self.subTest(query=query):
+                self.assertTrue(
+                    self.searcher._heading_matches_query(heading, query)
+                )
+
+        self.assertFalse(self.searcher._heading_matches_query("plain", "plane"))
+
 
 if __name__ == "__main__":
     unittest.main()
