@@ -82,7 +82,12 @@
                     <div class="day-title">
                         <span>{{ active_words|length }} 个单词</span>
                         {% if active_words %}
-                            <a class="study-link" href="{{ url_for('study', study_day_id=active_day.id) }}">开始背诵</a>
+                            <div class="day-actions">
+                                <a class="study-link" href="{{ url_for('study', study_day_id=active_day.id) }}">间隔复习</a>
+                                <form class="inline-repeat-form" method="post" action="{{ url_for('start_repeat_review', study_day_id=active_day.id) }}">
+                                    <button class="repeat-link" type="submit">重新背诵当天</button>
+                                </form>
+                            </div>
                         {% endif %}
                     </div>
                     {% if active_words %}

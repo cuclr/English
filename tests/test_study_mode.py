@@ -180,6 +180,81 @@ class StudyModeTest(unittest.TestCase):
         self.assertIn(overdue_id, candidate_ids)
         self.assertNotIn(future_id, candidate_ids)
 
+    def test_completed_day_can_be_repeated_once_without_resetting_progress(self):
+        with vocabulary_app.get_db() as connection:
+            connection.execute(
+                "UPDATE words SET last_reviewed = ?, next_review_date = '2999-01-01'",
+                (date.today().isoformat(),),
+            )
+            original_level = connection.execute(
+                "SELECT level FROM words WHERE id = ?", (self.first_word_id,)
+            ).fetchone()["level"]
+
+        normal_page = self.client.get(f"/study/{self.day_id}")
+        self.assertIn("今天到期的单词已经复习完成", normal_page.get_data(as_text=True))
+        self.assertIn("重新背诵当天 2 个单词", normal_page.get_data(as_text=True))
+
+        start_response = self.client.post(f"/study/{self.day_id}/repeat")
+        self.assertEqual(start_response.status_code, 302)
+        self.assertIn("mode=repeat", start_response.location)
+
+        repeat_page = self.client.get(start_response.location)
+        repeat_html = repeat_page.get_data(as_text=True)
+        self.assertIn("重新背诵", repeat_html)
+        self.assertIn('name="review_mode" value="repeat"', repeat_html)
+        self.assertIn("当前待复习</span></div>", repeat_html)
+
+        first_response = self.client.post(
+            f"/study/{self.day_id}/review",
+            data={
+                "word_id": self.first_word_id,
+                "rating": "known",
+                "review_mode": "repeat",
+            },
+        )
+        self.assertEqual(first_response.status_code, 302)
+        self.assertIn("mode=repeat", first_response.location)
+
+        with self.client.session_transaction() as client_session:
+            after_record_id = client_session["repeat_review"]["after_record_id"]
+
+        with vocabulary_app.get_db() as connection:
+            remaining_ids = {
+                word["id"]
+                for word in vocabulary_app.get_repeat_review_candidates(
+                    connection,
+                    self.day_id,
+                    after_record_id,
+                )
+            }
+            updated_level = connection.execute(
+                "SELECT level FROM words WHERE id = ?", (self.first_word_id,)
+            ).fetchone()["level"]
+
+        self.assertNotIn(self.first_word_id, remaining_ids)
+        self.assertGreater(updated_level, original_level)
+
+        second_word_id = next(iter(remaining_ids))
+        second_response = self.client.post(
+            f"/study/{self.day_id}/review",
+            data={
+                "word_id": second_word_id,
+                "rating": "vague",
+                "review_mode": "repeat",
+            },
+        )
+        completed_page = self.client.get(second_response.location)
+        completed_html = completed_page.get_data(as_text=True)
+        self.assertIn("当天词库已经重新背诵一轮", completed_html)
+        self.assertIn("重新背诵当天 2 个单词", completed_html)
+
+    def test_main_page_has_separate_spaced_and_repeat_review_actions(self):
+        html = self.client.get("/").get_data(as_text=True)
+
+        self.assertIn("间隔复习", html)
+        self.assertIn("重新背诵当天", html)
+        self.assertIn(f'/study/{self.day_id}/repeat', html)
+
 
 if __name__ == "__main__":
     unittest.main()

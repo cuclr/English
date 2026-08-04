@@ -214,6 +214,47 @@ def get_review_candidates(
     return [deserialize_word(row) for row in rows]
 
 
+def get_repeat_review_candidates(
+    connection: sqlite3.Connection, selected_day_id: int, after_record_id: int
+) -> list[dict]:
+    """Load each word from one date once for an explicit repeat round."""
+    rows = connection.execute(
+        """
+        SELECT words.*, study_days.study_date AS source_study_date
+        FROM words
+        JOIN study_days ON study_days.id = words.study_day_id
+        WHERE words.study_day_id = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM learning_records
+              WHERE learning_records.word_id = words.id
+                AND learning_records.id > ?
+          )
+        ORDER BY words.id ASC
+        """,
+        (selected_day_id, after_record_id),
+    ).fetchall()
+    return [deserialize_word(row) for row in rows]
+
+
+def get_repeat_review_state(study_day_id: int) -> dict | None:
+    """Return a validated repeat-round state stored in the signed session."""
+    state = session.get("repeat_review")
+    if not isinstance(state, dict):
+        return None
+    try:
+        state_day_id = int(state["study_day_id"])
+        after_record_id = int(state["after_record_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if state_day_id != study_day_id or after_record_id < 0:
+        return None
+    return {
+        "study_day_id": state_day_id,
+        "after_record_id": after_record_id,
+    }
+
+
 def get_selected_day(connection: sqlite3.Connection) -> sqlite3.Row | None:
     """Return the selected day, falling back to the most recent day."""
     selected_day_id = session.get("selected_day_id")
@@ -495,6 +536,7 @@ def delete_word(word_id: int):
 @app.route("/study/<int:study_day_id>")
 def study(study_day_id: int):
     exclude_word_id = request.args.get("exclude_word_id", type=int)
+    repeat_mode = request.args.get("mode") == "repeat"
     today = date.today()
 
     with get_db() as connection:
@@ -508,7 +550,19 @@ def study(study_day_id: int):
         selected_word_count = connection.execute(
             "SELECT COUNT(*) FROM words WHERE study_day_id = ?", (study_day_id,)
         ).fetchone()[0]
-        candidates = get_review_candidates(connection, study_day_id, today)
+        repeat_state = get_repeat_review_state(study_day_id) if repeat_mode else None
+        if repeat_mode and repeat_state is None:
+            flash("重新背诵已结束或失效，请重新开始一轮。", "error")
+            return redirect(url_for("study", study_day_id=study_day_id))
+
+        if repeat_state:
+            candidates = get_repeat_review_candidates(
+                connection,
+                study_day_id,
+                repeat_state["after_record_id"],
+            )
+        else:
+            candidates = get_review_candidates(connection, study_day_id, today)
         word = choose_weighted_word(
             candidates,
             previous_word_id=exclude_word_id,
@@ -522,13 +576,18 @@ def study(study_day_id: int):
             (today.isoformat(),),
         ).fetchone()[0]
 
-    item = dict(word) if word is not None else None
+    item = word if word is not None else None
     if item:
         item["level_label"] = level_label(int(item["level"]))
     remaining_count = len(candidates)
-    progress_total = reviewed_today + remaining_count
+    reviewed_count = (
+        selected_word_count - remaining_count if repeat_mode else reviewed_today
+    )
+    progress_total = (
+        selected_word_count if repeat_mode else reviewed_count + remaining_count
+    )
     progress_percent = (
-        round(reviewed_today / progress_total * 100) if progress_total else 100
+        round(reviewed_count / progress_total * 100) if progress_total else 100
     )
 
     return render_template(
@@ -536,43 +595,100 @@ def study(study_day_id: int):
         day=day,
         word=item,
         selected_word_count=selected_word_count,
-        reviewed_today=reviewed_today,
+        reviewed_count=reviewed_count,
         remaining_count=remaining_count,
         progress_percent=progress_percent,
+        repeat_mode=repeat_mode,
     )
+
+
+@app.post("/study/<int:study_day_id>/repeat")
+def start_repeat_review(study_day_id: int):
+    """Start a one-pass review containing every word from the selected date."""
+    with get_db() as connection:
+        day = connection.execute(
+            "SELECT 1 FROM study_days WHERE id = ?", (study_day_id,)
+        ).fetchone()
+        word_count = connection.execute(
+            "SELECT COUNT(*) FROM words WHERE study_day_id = ?", (study_day_id,)
+        ).fetchone()[0]
+        latest_record_id = connection.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM learning_records"
+        ).fetchone()[0]
+
+    if day is None:
+        flash("学习日期不存在。", "error")
+        return redirect(url_for("index"))
+    if not word_count:
+        flash("这个日期下还没有可以重新背诵的单词。", "error")
+        return redirect(url_for("study", study_day_id=study_day_id))
+
+    session["repeat_review"] = {
+        "study_day_id": study_day_id,
+        "after_record_id": latest_record_id,
+    }
+    session["selected_day_id"] = study_day_id
+    flash(f"已开始重新背诵，本轮共 {word_count} 个单词。", "success")
+    return redirect(url_for("study", study_day_id=study_day_id, mode="repeat"))
 
 
 @app.post("/study/<int:study_day_id>/review")
 def save_review(study_day_id: int):
     word_id = request.form.get("word_id", type=int)
     rating = request.form.get("rating", "")
+    repeat_mode = request.form.get("review_mode") == "repeat"
+    repeat_state = get_repeat_review_state(study_day_id) if repeat_mode else None
     today = date.today()
+
+    redirect_arguments = {"study_day_id": study_day_id}
+    if repeat_state:
+        redirect_arguments["mode"] = "repeat"
 
     if not word_id:
         flash("学习记录无效，请重新选择。", "error")
+        return redirect(url_for("study", **redirect_arguments))
+
+    if repeat_mode and repeat_state is None:
+        flash("重新背诵已结束或失效，请重新开始一轮。", "error")
         return redirect(url_for("study", study_day_id=study_day_id))
 
     with get_db() as connection:
-        word = connection.execute(
-            """
-            SELECT * FROM words
-            WHERE id = ?
-              AND (
-                    (study_day_id = ? AND last_reviewed IS NULL)
-                    OR COALESCE(NULLIF(next_review_date, ''), ?) <= ?
+        if repeat_state:
+            word = connection.execute(
+                """
+                SELECT * FROM words
+                WHERE id = ?
+                  AND study_day_id = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM learning_records
+                      WHERE learning_records.word_id = words.id
+                        AND learning_records.id > ?
                   )
-            """,
-            (word_id, study_day_id, today.isoformat(), today.isoformat()),
-        ).fetchone()
+                """,
+                (word_id, study_day_id, repeat_state["after_record_id"]),
+            ).fetchone()
+        else:
+            word = connection.execute(
+                """
+                SELECT * FROM words
+                WHERE id = ?
+                  AND (
+                        (study_day_id = ? AND last_reviewed IS NULL)
+                        OR COALESCE(NULLIF(next_review_date, ''), ?) <= ?
+                      )
+                """,
+                (word_id, study_day_id, today.isoformat(), today.isoformat()),
+            ).fetchone()
         if word is None:
             flash("该单词当前不在复习队列中。", "error")
-            return redirect(url_for("study", study_day_id=study_day_id))
+            return redirect(url_for("study", **redirect_arguments))
 
         try:
             update = calculate_review_update(dict(word), rating, today=today)
         except ValueError as exc:
             flash(str(exc), "error")
-            return redirect(url_for("study", study_day_id=study_day_id))
+            return redirect(url_for("study", **redirect_arguments))
 
         connection.execute(
             """
@@ -609,7 +725,7 @@ def save_review(study_day_id: int):
     return redirect(
         url_for(
             "study",
-            study_day_id=study_day_id,
+            **redirect_arguments,
             exclude_word_id=word_id,
         )
     )

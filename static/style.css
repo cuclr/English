@@ -159,6 +159,9 @@ small { color: var(--muted); }
 .study-link, .text-link, .study-nav a { color: var(--green); font-weight: 800; text-decoration: none; }
 .study-link { padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); }
 .study-link:hover, .text-link:hover, .study-nav a:hover { text-decoration: underline; }
+.inline-repeat-form { margin: 0; }
+.repeat-link { width: auto; min-height: 36px; margin: 0; padding: 6px 11px; border: 1px solid var(--accent-border); background: transparent; color: var(--green); font-size: 13px; }
+.repeat-link:hover { background: var(--accent-soft); color: var(--green-dark); }
 .word-list { display: grid; gap: 12px; margin-top: 18px; }
 .word-entry {
     padding: 16px;
@@ -176,6 +179,8 @@ small { color: var(--muted); }
 .phrases li { padding-left: 3px; }
 .empty-day, .empty-state { color: var(--muted); }
 .empty-state { text-align: center; }
+.repeat-review-form { width: min(320px, 100%); margin: 16px auto 14px; }
+.repeat-review-form button { margin: 0; }
 
 .study-page { width: min(860px, calc(100% - 32px)); padding-top: 24px; padding-bottom: 40px; }
 .study-nav { display: flex; justify-content: space-between; margin-bottom: 16px; color: var(--muted); font-size: 14px; }
