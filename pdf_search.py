@@ -204,10 +204,12 @@ class PdfSearcher:
 
 
 def find_vocabulary_pdf(directory: str | Path) -> Path:
-    """Return the only PDF book in a directory, rejecting ambiguous setup."""
-    pdf_files = sorted(Path(directory).glob("*.pdf"))
+    """Return the only PDF book from the project root or its books folder."""
+    project_dir = Path(directory)
+    candidates = [*project_dir.glob("*.pdf"), *(project_dir / "books").glob("*.pdf")]
+    pdf_files = sorted({path.resolve() for path in candidates if path.is_file()})
     if not pdf_files:
-        raise PdfSearchError("项目目录中没有找到 PDF 词书。")
+        raise PdfSearchError("项目目录或 books 文件夹中没有找到 PDF 词书。")
     if len(pdf_files) > 1:
-        raise PdfSearchError("项目目录中有多个 PDF，请在配置中明确指定词书。")
+        raise PdfSearchError("项目中有多个 PDF，请在配置中明确指定词书。")
     return pdf_files[0]
