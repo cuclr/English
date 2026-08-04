@@ -207,3 +207,27 @@
 ### Removed
 
 - 从所有 Git 历史提交中移除 PDF 词书；本地 `books` 中的词书保持不变。
+
+## 2026-08-04
+
+### Added
+
+- 新增 Windows 一键启动脚本 `start_app.bat`。
+- 新增本地服务健康检查和浏览器就绪等待模块。
+- 新增桌面 `TOOLS/English Vocabulary` 快捷方式。
+- 新增单实例、localhost 和浏览器启动基础测试。
+
+### Changed
+
+- Flask 改为仅监听 `127.0.0.1:5000`，不再开放局域网访问。
+- 原有 `start.bat` 改为兼容入口，统一调用 `start_app.bat`。
+- README 更新桌面启动、错误处理和关闭应用说明。
+
+### Fixed
+
+- 重复点击启动入口时不再创建多个 Flask 实例。
+- 移除隐藏 PowerShell 浏览器启动方式，减少不必要的防火墙或安全软件提示。
+
+### Removed
+
+- 移除 `0.0.0.0` 监听和手机局域网访问说明。

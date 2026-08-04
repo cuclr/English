@@ -208,6 +208,12 @@ def index():
     )
 
 
+@app.get("/health")
+def health_check():
+    """Identify the local app so the Windows launcher avoids duplicate servers."""
+    return {"app": "english-vocabulary", "status": "ok"}
+
+
 @app.route("/settings")
 def settings_page():
     books = book_manager.list_books()
@@ -561,4 +567,4 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=5000, debug=False)
