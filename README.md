@@ -90,6 +90,20 @@ python app.py
 数据库会在首次运行时自动创建于 `instance/vocabulary.db`。PDF 只在用户查询时读取，
 不会被批量导入数据库；SQLite 只保存用户添加的词条结果。
 
+## 同步到 GitHub
+
+项目会忽略 `books` 中的 PDF 词书、`instance` 中的 SQLite 数据和本地虚拟环境，GitHub 只保存程序代码与文档。
+首次推送完成后，后续修改使用以下命令即可快速同步：
+
+```powershell
+cd D:\Codex\program\English
+git add .
+git commit -m "feat: describe your change"
+git push
+```
+
+提交前可先运行 `git status` 确认文件范围。正常更新不需要再次清理历史，也不要使用强制推送。
+
 ## MVP 暂不包含
 
 - 单词内容编辑
