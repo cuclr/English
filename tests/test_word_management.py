@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import app as vocabulary_app
+from pdf_search import PdfEntry
 
 
 class WordManagementTest(unittest.TestCase):
@@ -91,6 +92,25 @@ class WordManagementTest(unittest.TestCase):
             f'data-active-day-id="{self.second_day_id}"',
             html,
         )
+
+    def test_saved_word_message_includes_definition(self):
+        searcher = Mock()
+        searcher.search.return_value = PdfEntry(
+            word="example",
+            definition="n. 例子；实例",
+            phrases=(),
+            page_number=1,
+        )
+        with patch("app.get_pdf_searcher", return_value=searcher):
+            response = self.client.post(
+                "/words",
+                data={"study_day_id": self.first_day_id, "word": "example"},
+                follow_redirects=True,
+            )
+
+        html = response.get_data(as_text=True)
+        self.assertIn('class="message success"', html)
+        self.assertIn("已保存：example · n. 例子；实例", html)
 
     def test_library_hides_phrases_but_study_mode_keeps_them(self):
         phrase = "example phrase 示例词组"

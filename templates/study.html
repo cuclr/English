@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ day.study_date }} · 背诵模式</title>
+    <title>{% if custom_mode %}自由组合背诵{% else %}{{ day.study_date }} · 背诵模式{% endif %}</title>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <main class="page study-page">
         <nav class="study-nav">
-            <a href="{{ url_for('index') }}">← 返回每日词库</a>
-            <span>{{ day.study_date }}</span>
+            <a href="{% if custom_mode %}{{ url_for('custom_review_setup') }}{% else %}{{ url_for('index') }}{% endif %}">← {% if custom_mode %}调整背诵范围{% else %}返回每日词库{% endif %}</a>
+            <span>{% if custom_mode %}{{ scope_label }}{% else %}{{ day.study_date }}{% endif %}</span>
         </nav>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -26,9 +26,11 @@
 
         <header class="study-header">
             <p class="eyebrow">SPACED REPETITION</p>
-            <h1>{% if repeat_mode %}重新背诵{% else %}间隔复习{% endif %}</h1>
+            <h1>{% if custom_mode %}组合背诵{% elif repeat_mode %}重新背诵{% else %}间隔复习{% endif %}</h1>
             <p>
-                {% if repeat_mode %}
+                {% if custom_mode %}
+                    不会和模糊的单词会再次出现；认识和熟练的单词退出本轮。
+                {% elif repeat_mode %}
                     本轮只背诵 {{ day.study_date }} 的全部单词，每个单词出现一次。
                 {% else %}
                     当前日期有 {{ selected_word_count }} 个单词，到期旧词也会加入抽取队列。
@@ -36,12 +38,12 @@
             </p>
         </header>
 
-        <section class="study-stats" aria-label="本日学习统计">
-            <div><strong>{{ progress_percent }}%</strong><span>{% if repeat_mode %}本轮进度{% else %}今日进度{% endif %}</span></div>
-            <div><strong>{{ reviewed_count }}</strong><span>{% if repeat_mode %}本轮作答{% else %}今日作答{% endif %}</span></div>
-            <div><strong>{{ remaining_count }}</strong><span>当前待复习</span></div>
+        <section class="study-stats" aria-label="{% if custom_mode or repeat_mode %}本轮学习统计{% else %}本日学习统计{% endif %}">
+            <div><strong>{{ progress_percent }}%</strong><span>{% if custom_mode or repeat_mode %}本轮进度{% else %}今日进度{% endif %}</span></div>
+            <div><strong>{{ reviewed_count }}</strong><span>{% if custom_mode %}本轮已掌握{% elif repeat_mode %}本轮作答{% else %}今日作答{% endif %}</span></div>
+            <div><strong>{{ remaining_count }}</strong><span>{% if custom_mode %}尚未掌握{% else %}当前待复习{% endif %}</span></div>
         </section>
-        <div class="progress-track" role="progressbar" aria-valuenow="{{ progress_percent }}" aria-valuemin="0" aria-valuemax="100" aria-label="今日复习进度">
+        <div class="progress-track" role="progressbar" aria-valuenow="{{ progress_percent }}" aria-valuemin="0" aria-valuemax="100" aria-label="{% if custom_mode or repeat_mode %}本轮复习进度{% else %}今日复习进度{% endif %}">
             <span style="width: {{ progress_percent }}%"></span>
         </div>
 
@@ -57,7 +59,7 @@
                 <h2>{{ word.word }}</h2>
                 <p class="review-meta">
                     答对 {{ word.correct_count }} 次 · 答错 {{ word.wrong_count }} 次
-                    {% if word.source_study_date != day.study_date %} · 来自 {{ word.source_study_date }}{% endif %}
+                    {% if custom_mode or word.source_study_date != day.study_date %} · 来自 {{ word.source_study_date }}{% endif %}
                 </p>
 
                 <button id="reveal-button" class="reveal-button" type="button">显示释义</button>
@@ -72,7 +74,7 @@
                     {% endif %}
                 </div>
 
-                <form id="review-form" class="review-actions" method="post" action="{{ url_for('save_review', study_day_id=day.id) }}">
+                <form id="review-form" class="review-actions" method="post" action="{% if custom_mode %}{{ url_for('save_custom_review') }}{% else %}{{ url_for('save_review', study_day_id=day.id) }}{% endif %}">
                     <input type="hidden" name="word_id" value="{{ word.id }}">
                     <input id="selected-rating" type="hidden" name="rating" value="">
                     {% if repeat_mode %}<input type="hidden" name="review_mode" value="repeat">{% endif %}
@@ -91,7 +93,9 @@
         {% else %}
             <div class="empty-state">
                 <p>
-                    {% if not selected_word_count %}
+                    {% if custom_mode %}
+                        所选范围内的单词已经全部掌握。
+                    {% elif not selected_word_count %}
                         这个日期下还没有单词。
                     {% elif repeat_mode %}
                         当天词库已经重新背诵一轮。
@@ -99,7 +103,9 @@
                         今天到期的单词已经复习完成。
                     {% endif %}
                 </p>
-                {% if selected_word_count %}
+                {% if custom_mode %}
+                    <a class="study-link completion-action" href="{{ url_for('custom_review_setup') }}">重新选择背诵范围</a>
+                {% elif selected_word_count %}
                     <form class="repeat-review-form" method="post" action="{{ url_for('start_repeat_review', study_day_id=day.id) }}">
                         <button type="submit">重新背诵当天 {{ selected_word_count }} 个单词</button>
                     </form>
@@ -163,5 +169,13 @@
         });
     </script>
     {% endif %}
+    <script>
+        document.querySelectorAll('.message').forEach((message) => {
+            window.setTimeout(() => {
+                message.classList.add('message-leaving');
+                message.addEventListener('animationend', () => message.remove(), { once: true });
+            }, 3500);
+        });
+    </script>
 </body>
 </html>

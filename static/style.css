@@ -97,7 +97,7 @@ body {
 
 .hero { margin-bottom: 32px; }
 .hero-topline { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.hero-links { display: flex; gap: 16px; }
+.hero-links { display: flex; flex-wrap: wrap; gap: 16px; }
 .hero h1 { margin: 6px 0 10px; font-family: Georgia, serif; font-size: clamp(42px, 8vw, 72px); }
 .hero > p { color: var(--muted); font-size: 18px; }
 .eyebrow { margin: 0; color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: .16em; }
@@ -181,6 +181,7 @@ small { color: var(--muted); }
 .empty-state { text-align: center; }
 .repeat-review-form { width: min(320px, 100%); margin: 16px auto 14px; }
 .repeat-review-form button { margin: 0; }
+.completion-action { display: inline-block; margin: 14px 0; }
 
 .study-page { width: min(860px, calc(100% - 32px)); padding-top: 24px; padding-bottom: 40px; }
 .study-nav { display: flex; justify-content: space-between; margin-bottom: 16px; color: var(--muted); font-size: 14px; }
@@ -224,6 +225,26 @@ small { color: var(--muted); }
 .known-button { background: var(--green); }
 .easy-button { background: #315c83; }
 .easy-button:hover { background: #244867; }
+
+.review-range-page { width: min(820px, calc(100% - 32px)); }
+.review-range-header { margin-bottom: 22px; }
+.review-range-header h1 { margin: 7px 0; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(38px, 7vw, 54px); }
+.review-range-header > p:last-child { max-width: 700px; color: var(--muted); line-height: 1.65; }
+.review-range-form { padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 10px 34px rgb(36 48 39 / 7%); }
+.range-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.range-toolbar > span { color: var(--muted); font-size: 14px; }
+.select-all-option, .range-day-option { cursor: pointer; }
+.select-all-option { display: flex; align-items: center; gap: 9px; color: var(--green-dark); }
+.select-all-option input, .range-day-option input { width: 18px; min-height: 18px; margin: 0; accent-color: var(--green); }
+.range-day-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.range-day-option { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); transition: border-color .16s ease, background-color .16s ease, transform .16s ease; }
+.range-day-option:hover { border-color: var(--accent-border); background: var(--accent-surface); transform: translateY(-1px); }
+.range-day-option:has(input:checked) { border-color: var(--green); background: var(--accent-soft); }
+.range-day-option.is-disabled { cursor: not-allowed; opacity: .48; }
+.range-day-date { color: var(--ink); font-weight: 800; }
+.range-day-count { color: var(--muted); font-size: 13px; }
+.range-selection-error { margin: 14px 0 0; color: #7b2929; text-align: center; }
+.start-range-review { display: block; width: min(360px, 100%); margin: 18px auto 0; }
 
 .dates-page { width: min(820px, calc(100% - 32px)); }
 .dates-header { margin-bottom: 28px; }
@@ -303,7 +324,7 @@ small { color: var(--muted); }
 }
 
 @media (max-width: 480px) {
-    .page, .study-page, .dates-page, .settings-page { width: min(100% - 20px, 960px); padding-top: 24px; padding-bottom: 48px; }
+    .page, .study-page, .dates-page, .settings-page, .review-range-page { width: min(100% - 20px, 960px); padding-top: 24px; padding-bottom: 48px; }
     .card, .day-card, .empty-state, .settings-section { padding: 18px; border-radius: 14px; }
     .hero { margin-bottom: 24px; }
     .hero h1 { font-size: 43px; }
@@ -330,6 +351,8 @@ small { color: var(--muted); }
     .compact-word-row span { margin-top: 4px; }
     .book-row { align-items: stretch; flex-direction: column; }
     .book-row form, .book-row button, .danger-button { width: 100%; }
+    .range-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; }
+    .review-range-form { padding: 16px; }
 }
 
 @media (max-width: 680px) {
@@ -337,6 +360,7 @@ small { color: var(--muted); }
     .forms-grid { grid-template-columns: 1fr; }
     .messages { top: 10px; right: 16px; }
     .review-buttons { grid-template-columns: 1fr 1fr; }
+    .range-day-list { grid-template-columns: 1fr; }
     .theme-options { grid-template-columns: 1fr 1fr; }
 }
 

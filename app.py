@@ -27,6 +27,12 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 book_manager = BookManager(BASE_DIR)
 _pdf_searcher: PdfSearcher | None = None
 _pdf_searcher_path: Path | None = None
+RATING_LABELS = {
+    "again": "不会",
+    "vague": "模糊",
+    "known": "认识",
+    "easy": "熟练",
+}
 
 
 class DatabaseConnection(sqlite3.Connection):
@@ -218,21 +224,68 @@ def get_repeat_review_candidates(
     connection: sqlite3.Connection, selected_day_id: int, after_record_id: int
 ) -> list[dict]:
     """Load each word from one date once for an explicit repeat round."""
+    return get_review_round_candidates(
+        connection,
+        [selected_day_id],
+        after_record_id,
+    )
+
+
+def get_review_round_candidates(
+    connection: sqlite3.Connection,
+    study_day_ids: list[int],
+    after_record_id: int,
+) -> list[dict]:
+    """Load unreviewed words from a one-pass round covering selected dates."""
+    normalized_ids = sorted({int(day_id) for day_id in study_day_ids if day_id})
+    if not normalized_ids:
+        return []
+    placeholders = ", ".join("?" for _ in normalized_ids)
     rows = connection.execute(
-        """
+        f"""
         SELECT words.*, study_days.study_date AS source_study_date
         FROM words
         JOIN study_days ON study_days.id = words.study_day_id
-        WHERE words.study_day_id = ?
+        WHERE words.study_day_id IN ({placeholders})
           AND NOT EXISTS (
               SELECT 1
               FROM learning_records
               WHERE learning_records.word_id = words.id
                 AND learning_records.id > ?
+        )
+        ORDER BY words.id ASC
+        """,
+        (*normalized_ids, after_record_id),
+    ).fetchall()
+    return [deserialize_word(row) for row in rows]
+
+
+def get_custom_review_candidates(
+    connection: sqlite3.Connection,
+    study_day_ids: list[int],
+    after_record_id: int,
+) -> list[dict]:
+    """Keep unknown words active until they are marked known in this round."""
+    normalized_ids = sorted({int(day_id) for day_id in study_day_ids if day_id})
+    if not normalized_ids:
+        return []
+    placeholders = ", ".join("?" for _ in normalized_ids)
+    rows = connection.execute(
+        f"""
+        SELECT words.*, study_days.study_date AS source_study_date
+        FROM words
+        JOIN study_days ON study_days.id = words.study_day_id
+        WHERE words.study_day_id IN ({placeholders})
+          AND NOT EXISTS (
+              SELECT 1
+              FROM learning_records
+              WHERE learning_records.word_id = words.id
+                AND learning_records.id > ?
+                AND learning_records.result = 'known'
           )
         ORDER BY words.id ASC
         """,
-        (selected_day_id, after_record_id),
+        (*normalized_ids, after_record_id),
     ).fetchall()
     return [deserialize_word(row) for row in rows]
 
@@ -253,6 +306,64 @@ def get_repeat_review_state(study_day_id: int) -> dict | None:
         "study_day_id": state_day_id,
         "after_record_id": after_record_id,
     }
+
+
+def get_custom_review_state() -> dict | None:
+    """Return the selected dates and baseline for a custom review round."""
+    state = session.get("custom_review")
+    if not isinstance(state, dict):
+        return None
+    try:
+        study_day_ids = sorted(
+            {
+                int(day_id)
+                for day_id in state["study_day_ids"]
+                if int(day_id) > 0
+            }
+        )
+        after_record_id = int(state["after_record_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not study_day_ids or after_record_id < 0:
+        return None
+    return {
+        "study_day_ids": study_day_ids,
+        "after_record_id": after_record_id,
+    }
+
+
+def apply_review_result(
+    connection: sqlite3.Connection,
+    word: sqlite3.Row,
+    rating: str,
+    today: date,
+) -> None:
+    """Update one word and append its learning record in one transaction."""
+    update = calculate_review_update(dict(word), rating, today=today)
+    connection.execute(
+        """
+        UPDATE words
+        SET level = ?, correct_count = ?, wrong_count = ?,
+            last_reviewed = ?, next_review_date = ?
+        WHERE id = ?
+        """,
+        (
+            update.level,
+            update.correct_count,
+            update.wrong_count,
+            update.last_reviewed,
+            update.next_review_date,
+            word["id"],
+        ),
+    )
+    record_result = "unknown" if rating in {"again", "vague"} else "known"
+    connection.execute(
+        """
+        INSERT INTO learning_records (word_id, result, reviewed_at)
+        VALUES (?, ?, ?)
+        """,
+        (word["id"], record_result, update.last_reviewed),
+    )
 
 
 def get_selected_day(connection: sqlite3.Connection) -> sqlite3.Row | None:
@@ -488,7 +599,7 @@ def add_word():
     except sqlite3.IntegrityError:
         flash("所选学习日期不存在。", "error")
     else:
-        flash(f"已保存：{entry.word}", "success")
+        flash(f"已保存：{entry.word} · {entry.definition}", "success")
 
     return redirect(url_for("index"))
 
@@ -531,6 +642,196 @@ def delete_word(word_id: int):
     session["selected_day_id"] = word["study_day_id"]
     flash(f"已删除：{word['word']}", "success")
     return redirect(url_for(next_endpoint))
+
+
+@app.get("/study/range")
+def custom_review_setup():
+    """Show the flexible date-range selector for a custom review round."""
+    with get_db() as connection:
+        days = connection.execute(
+            """
+            SELECT study_days.id, study_days.study_date,
+                   COUNT(words.id) AS word_count
+            FROM study_days
+            LEFT JOIN words ON words.study_day_id = study_days.id
+            GROUP BY study_days.id
+            ORDER BY study_days.study_date DESC
+            """
+        ).fetchall()
+    total_word_count = sum(int(day["word_count"]) for day in days)
+    return render_template(
+        "review_range.html",
+        days=days,
+        total_word_count=total_word_count,
+    )
+
+
+@app.post("/study/range")
+def start_custom_review():
+    """Start a weighted review round across any user-selected dates."""
+    requested_ids = sorted(
+        set(request.form.getlist("study_day_ids", type=int))
+    )
+    if not requested_ids:
+        flash("请至少选择一个包含单词的日期。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    placeholders = ", ".join("?" for _ in requested_ids)
+    with get_db() as connection:
+        selected_days = connection.execute(
+            f"""
+            SELECT study_days.id, COUNT(words.id) AS word_count
+            FROM study_days
+            LEFT JOIN words ON words.study_day_id = study_days.id
+            WHERE study_days.id IN ({placeholders})
+            GROUP BY study_days.id
+            HAVING COUNT(words.id) > 0
+            """,
+            requested_ids,
+        ).fetchall()
+        latest_record_id = connection.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM learning_records"
+        ).fetchone()[0]
+
+    selected_ids = sorted(int(day["id"]) for day in selected_days)
+    selected_word_count = sum(int(day["word_count"]) for day in selected_days)
+    if not selected_ids:
+        flash("所选日期中没有可以背诵的单词。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    session["custom_review"] = {
+        "study_day_ids": selected_ids,
+        "after_record_id": latest_record_id,
+    }
+    flash(
+        f"已开始组合背诵：{len(selected_ids)} 个日期，共 {selected_word_count} 个单词。",
+        "success",
+    )
+    return redirect(url_for("custom_review_session"))
+
+
+@app.get("/study/range/session")
+def custom_review_session():
+    """Draw from the selected dates until every word is marked known."""
+    state = get_custom_review_state()
+    if state is None:
+        flash("组合背诵范围已失效，请重新选择。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    exclude_word_id = request.args.get("exclude_word_id", type=int)
+    day_ids = state["study_day_ids"]
+    placeholders = ", ".join("?" for _ in day_ids)
+    today = date.today()
+    with get_db() as connection:
+        selected_days = connection.execute(
+            f"""
+            SELECT id, study_date
+            FROM study_days
+            WHERE id IN ({placeholders})
+            ORDER BY study_date ASC
+            """,
+            day_ids,
+        ).fetchall()
+        selected_word_count = connection.execute(
+            f"SELECT COUNT(*) FROM words WHERE study_day_id IN ({placeholders})",
+            day_ids,
+        ).fetchone()[0]
+        candidates = get_custom_review_candidates(
+            connection,
+            day_ids,
+            state["after_record_id"],
+        )
+        word = choose_weighted_word(
+            candidates,
+            previous_word_id=exclude_word_id,
+            today=today,
+        )
+
+    if not selected_days or not selected_word_count:
+        session.pop("custom_review", None)
+        flash("所选日期已经没有可以背诵的单词。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    if len(selected_days) == 1:
+        scope_label = selected_days[0]["study_date"]
+    else:
+        scope_label = (
+            f"{len(selected_days)} 个日期 · "
+            f"{selected_days[0]['study_date']} 至 {selected_days[-1]['study_date']}"
+        )
+
+    item = word if word is not None else None
+    if item:
+        item["level_label"] = level_label(int(item["level"]))
+    remaining_count = len(candidates)
+    mastered_count = selected_word_count - remaining_count
+    progress_percent = (
+        round(mastered_count / selected_word_count * 100)
+        if selected_word_count
+        else 100
+    )
+    return render_template(
+        "study.html",
+        day=None,
+        word=item,
+        selected_word_count=selected_word_count,
+        reviewed_count=mastered_count,
+        remaining_count=remaining_count,
+        progress_percent=progress_percent,
+        repeat_mode=False,
+        custom_mode=True,
+        scope_label=scope_label,
+    )
+
+
+@app.post("/study/range/review")
+def save_custom_review():
+    """Save one custom-range answer while keeping unknown words in the queue."""
+    state = get_custom_review_state()
+    if state is None:
+        flash("组合背诵范围已失效，请重新选择。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    word_id = request.form.get("word_id", type=int)
+    rating = request.form.get("rating", "")
+    if not word_id:
+        flash("学习记录无效，请重新选择。", "error")
+        return redirect(url_for("custom_review_session"))
+
+    day_ids = state["study_day_ids"]
+    placeholders = ", ".join("?" for _ in day_ids)
+    with get_db() as connection:
+        word = connection.execute(
+            f"""
+            SELECT * FROM words
+            WHERE id = ?
+              AND study_day_id IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM learning_records
+                  WHERE learning_records.word_id = words.id
+                    AND learning_records.id > ?
+                    AND learning_records.result = 'known'
+              )
+            """,
+            (word_id, *day_ids, state["after_record_id"]),
+        ).fetchone()
+        if word is None:
+            flash("该单词当前不在组合背诵队列中。", "error")
+            return redirect(url_for("custom_review_session"))
+        try:
+            apply_review_result(connection, word, rating, date.today())
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("custom_review_session"))
+
+    if rating in {"again", "vague"}:
+        flash(f"已记录：{RATING_LABELS[rating]}，这个单词稍后还会出现。", "success")
+    else:
+        flash(f"已记录：{RATING_LABELS[rating]}", "success")
+    return redirect(
+        url_for("custom_review_session", exclude_word_id=word_id)
+    )
 
 
 @app.route("/study/<int:study_day_id>")
@@ -599,6 +900,7 @@ def study(study_day_id: int):
         remaining_count=remaining_count,
         progress_percent=progress_percent,
         repeat_mode=repeat_mode,
+        custom_mode=False,
     )
 
 
@@ -685,43 +987,12 @@ def save_review(study_day_id: int):
             return redirect(url_for("study", **redirect_arguments))
 
         try:
-            update = calculate_review_update(dict(word), rating, today=today)
+            apply_review_result(connection, word, rating, today)
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("study", **redirect_arguments))
 
-        connection.execute(
-            """
-            UPDATE words
-            SET level = ?, correct_count = ?, wrong_count = ?,
-                last_reviewed = ?, next_review_date = ?
-            WHERE id = ?
-            """,
-            (
-                update.level,
-                update.correct_count,
-                update.wrong_count,
-                update.last_reviewed,
-                update.next_review_date,
-                word_id,
-            ),
-        )
-        record_result = "unknown" if rating in {"again", "vague"} else "known"
-        connection.execute(
-            """
-            INSERT INTO learning_records (word_id, result, reviewed_at)
-            VALUES (?, ?, ?)
-            """,
-            (word_id, record_result, update.last_reviewed),
-        )
-
-    rating_labels = {
-        "again": "不会",
-        "vague": "模糊",
-        "known": "认识",
-        "easy": "熟练",
-    }
-    flash(f"已记录：{rating_labels[rating]}", "success")
+    flash(f"已记录：{RATING_LABELS[rating]}", "success")
     return redirect(
         url_for(
             "study",

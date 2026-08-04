@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>自由组合背诵</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="page review-range-page">
+        <nav class="study-nav">
+            <a href="{{ url_for('index') }}">← 返回每日词库</a>
+            <span>{{ total_word_count }} 个单词可选</span>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="messages" aria-live="polite" aria-atomic="true">
+                    {% for category, message in messages %}
+                        <p class="message {{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+
+        <header class="review-range-header">
+            <p class="eyebrow">FLEXIBLE REVIEW</p>
+            <h1>自由组合背诵</h1>
+            <p>选择任意几个日期，或一次全选。不会和模糊的单词会继续留在队列，认识的单词本轮不再重复。</p>
+        </header>
+
+        {% if days %}
+            <form id="review-range-form" class="review-range-form" method="post" action="{{ url_for('start_custom_review') }}">
+                <div class="range-toolbar">
+                    <label class="select-all-option" for="select-all-days">
+                        <input id="select-all-days" type="checkbox">
+                        <span>全选所有日期</span>
+                    </label>
+                    <span id="selection-summary">尚未选择日期</span>
+                </div>
+
+                <section class="range-day-list" aria-label="选择背诵日期">
+                    {% for day in days %}
+                        <label class="range-day-option {% if not day.word_count %}is-disabled{% endif %}">
+                            <input
+                                class="range-day-checkbox"
+                                type="checkbox"
+                                name="study_day_ids"
+                                value="{{ day.id }}"
+                                data-word-count="{{ day.word_count }}"
+                                {% if not day.word_count %}disabled{% endif %}
+                            >
+                            <span class="range-day-date">{{ day.study_date }}</span>
+                            <span class="range-day-count">{{ day.word_count }} 个单词</span>
+                        </label>
+                    {% endfor %}
+                </section>
+
+                <p id="range-selection-error" class="range-selection-error" role="alert" hidden>请至少选择一个包含单词的日期。</p>
+                <button id="start-range-review" class="start-range-review" type="submit" disabled>选择日期后开始背诵</button>
+            </form>
+        {% else %}
+            <div class="empty-state">
+                <p>还没有学习日期，请先创建日期并添加单词。</p>
+                <a class="text-link" href="{{ url_for('index') }}">返回每日词库</a>
+            </div>
+        {% endif %}
+    </main>
+
+    <script>
+        const rangeForm = document.querySelector('#review-range-form');
+        const selectAll = document.querySelector('#select-all-days');
+        const dayCheckboxes = Array.from(document.querySelectorAll('.range-day-checkbox:not(:disabled)'));
+        const selectionSummary = document.querySelector('#selection-summary');
+        const selectionError = document.querySelector('#range-selection-error');
+        const startButton = document.querySelector('#start-range-review');
+
+        const updateSelection = () => {
+            const selected = dayCheckboxes.filter((checkbox) => checkbox.checked);
+            const wordCount = selected.reduce(
+                (total, checkbox) => total + Number(checkbox.dataset.wordCount),
+                0,
+            );
+            if (selectAll) {
+                selectAll.checked = selected.length > 0 && selected.length === dayCheckboxes.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < dayCheckboxes.length;
+            }
+            if (selectionSummary) {
+                selectionSummary.textContent = selected.length
+                    ? `已选择 ${selected.length} 个日期，共 ${wordCount} 个单词`
+                    : '尚未选择日期';
+            }
+            if (startButton) {
+                startButton.disabled = selected.length === 0;
+                startButton.textContent = selected.length
+                    ? `开始背诵 ${wordCount} 个单词`
+                    : '选择日期后开始背诵';
+            }
+            if (selectionError) selectionError.hidden = true;
+        };
+
+        selectAll?.addEventListener('change', () => {
+            dayCheckboxes.forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+            updateSelection();
+        });
+        dayCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSelection));
+        rangeForm?.addEventListener('submit', (event) => {
+            if (!dayCheckboxes.some((checkbox) => checkbox.checked)) {
+                event.preventDefault();
+                selectionError.hidden = false;
+            }
+        });
+        updateSelection();
+    </script>
+</body>
+</html>
