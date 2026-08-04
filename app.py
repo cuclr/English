@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 import json
 import sqlite3
@@ -5,6 +6,11 @@ import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 
 from pdf_search import PdfSearchError, PdfSearcher, find_vocabulary_pdf
+from spaced_repetition import (
+    calculate_review_update,
+    choose_weighted_word,
+    level_label,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -50,9 +56,16 @@ def init_db() -> None:
                 study_day_id INTEGER NOT NULL,
                 word TEXT NOT NULL,
                 definition TEXT NOT NULL DEFAULT '',
+                meaning TEXT NOT NULL DEFAULT '',
                 phrases TEXT NOT NULL DEFAULT '[]',
                 source_page INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_date TEXT,
+                level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 1 AND 5),
+                correct_count INTEGER NOT NULL DEFAULT 0,
+                wrong_count INTEGER NOT NULL DEFAULT 0,
+                last_reviewed TEXT,
+                next_review_date TEXT,
                 FOREIGN KEY (study_day_id) REFERENCES study_days (id)
                     ON DELETE CASCADE
             );
@@ -73,12 +86,36 @@ def init_db() -> None:
         }
         migrations = {
             "definition": "ALTER TABLE words ADD COLUMN definition TEXT NOT NULL DEFAULT ''",
+            "meaning": "ALTER TABLE words ADD COLUMN meaning TEXT NOT NULL DEFAULT ''",
             "phrases": "ALTER TABLE words ADD COLUMN phrases TEXT NOT NULL DEFAULT '[]'",
             "source_page": "ALTER TABLE words ADD COLUMN source_page INTEGER",
+            "created_date": "ALTER TABLE words ADD COLUMN created_date TEXT",
+            "level": "ALTER TABLE words ADD COLUMN level INTEGER NOT NULL DEFAULT 1",
+            "correct_count": "ALTER TABLE words ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0",
+            "wrong_count": "ALTER TABLE words ADD COLUMN wrong_count INTEGER NOT NULL DEFAULT 0",
+            "last_reviewed": "ALTER TABLE words ADD COLUMN last_reviewed TEXT",
+            "next_review_date": "ALTER TABLE words ADD COLUMN next_review_date TEXT",
         }
         for column, statement in migrations.items():
             if column not in existing_columns:
                 connection.execute(statement)
+        connection.execute(
+            "UPDATE words SET meaning = definition WHERE meaning = ''"
+        )
+        connection.execute(
+            """
+            UPDATE words
+            SET created_date = COALESCE(NULLIF(created_date, ''), DATE(created_at))
+            """
+        )
+        connection.execute(
+            """
+            UPDATE words
+            SET next_review_date = COALESCE(
+                NULLIF(next_review_date, ''), DATE('now', 'localtime')
+            )
+            """
+        )
 
 
 def get_pdf_searcher() -> PdfSearcher:
@@ -95,7 +132,27 @@ def deserialize_word(row: sqlite3.Row) -> dict:
         item["phrases"] = json.loads(item["phrases"])
     except (TypeError, json.JSONDecodeError):
         item["phrases"] = []
+    item["meaning"] = item.get("meaning") or item.get("definition") or ""
+    item["definition"] = item["meaning"]
     return item
+
+
+def get_review_candidates(
+    connection: sqlite3.Connection, selected_day_id: int, today: date
+) -> list[dict]:
+    """Load new words from the selected date plus all words currently due."""
+    rows = connection.execute(
+        """
+        SELECT words.*, study_days.study_date AS source_study_date
+        FROM words
+        JOIN study_days ON study_days.id = words.study_day_id
+        WHERE (words.study_day_id = ? AND words.last_reviewed IS NULL)
+           OR COALESCE(NULLIF(words.next_review_date, ''), ?) <= ?
+        ORDER BY words.id ASC
+        """,
+        (selected_day_id, today.isoformat(), today.isoformat()),
+    ).fetchall()
+    return [deserialize_word(row) for row in rows]
 
 
 def get_selected_day(connection: sqlite3.Connection) -> sqlite3.Row | None:
@@ -124,7 +181,9 @@ def index():
         if active_day:
             words = connection.execute(
                 """
-                SELECT id, study_day_id, word, definition, phrases, source_page
+                SELECT id, study_day_id, word, definition, meaning, phrases,
+                       source_page, created_date, level, correct_count,
+                       wrong_count, last_reviewed, next_review_date
                 FROM words
                 WHERE study_day_id = ?
                 ORDER BY id ASC
@@ -157,7 +216,9 @@ def date_library():
         ).fetchall()
         words = connection.execute(
             """
-            SELECT id, study_day_id, word, definition, phrases, source_page
+            SELECT id, study_day_id, word, definition, meaning, phrases,
+                   source_page, created_date, level, correct_count,
+                   wrong_count, last_reviewed, next_review_date
             FROM words
             ORDER BY id ASC
             """
@@ -219,6 +280,7 @@ def add_word():
     try:
         with get_db() as connection:
             saved_phrases = json.dumps(entry.phrases, ensure_ascii=False)
+            created_date = date.today().isoformat()
             existing = connection.execute(
                 """
                 SELECT id FROM words
@@ -231,11 +293,13 @@ def add_word():
                 connection.execute(
                     """
                     UPDATE words
-                    SET word = ?, definition = ?, phrases = ?, source_page = ?
+                    SET word = ?, definition = ?, meaning = ?, phrases = ?,
+                        source_page = ?
                     WHERE id = ?
                     """,
                     (
                         entry.word,
+                        entry.definition,
                         entry.definition,
                         saved_phrases,
                         entry.page_number,
@@ -246,15 +310,19 @@ def add_word():
                 connection.execute(
                     """
                     INSERT INTO words
-                        (study_day_id, word, definition, phrases, source_page)
-                    VALUES (?, ?, ?, ?, ?)
+                        (study_day_id, word, definition, meaning, phrases,
+                         source_page, created_date, next_review_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         study_day_id,
                         entry.word,
                         entry.definition,
+                        entry.definition,
                         saved_phrases,
                         entry.page_number,
+                        created_date,
+                        created_date,
                     ),
                 )
     except sqlite3.IntegrityError:
@@ -308,6 +376,7 @@ def delete_word(word_id: int):
 @app.route("/study/<int:study_day_id>")
 def study(study_day_id: int):
     exclude_word_id = request.args.get("exclude_word_id", type=int)
+    today = date.today()
 
     with get_db() as connection:
         day = connection.execute(
@@ -317,86 +386,107 @@ def study(study_day_id: int):
             flash("学习日期不存在。", "error")
             return redirect(url_for("index"))
 
-        word_count = connection.execute(
+        selected_word_count = connection.execute(
             "SELECT COUNT(*) FROM words WHERE study_day_id = ?", (study_day_id,)
         ).fetchone()[0]
-
-        if exclude_word_id and word_count > 1:
-            word = connection.execute(
-                """
-                SELECT id, word, definition, phrases
-                FROM words
-                WHERE study_day_id = ? AND id != ?
-                ORDER BY RANDOM()
-                LIMIT 1
-                """,
-                (study_day_id, exclude_word_id),
-            ).fetchone()
-        else:
-            word = connection.execute(
-                """
-                SELECT id, word, definition, phrases
-                FROM words
-                WHERE study_day_id = ?
-                ORDER BY RANDOM()
-                LIMIT 1
-                """,
-                (study_day_id,),
-            ).fetchone()
-
-        stats = connection.execute(
+        candidates = get_review_candidates(connection, study_day_id, today)
+        word = choose_weighted_word(
+            candidates,
+            previous_word_id=exclude_word_id,
+            today=today,
+        )
+        reviewed_today = connection.execute(
             """
-            SELECT COUNT(learning_records.id) AS total,
-                   COALESCE(SUM(learning_records.result = 'known'), 0) AS known,
-                   COALESCE(SUM(learning_records.result = 'unknown'), 0) AS unknown
-            FROM learning_records
-            JOIN words ON words.id = learning_records.word_id
-            WHERE words.study_day_id = ?
+            SELECT COUNT(*) FROM learning_records
+            WHERE SUBSTR(reviewed_at, 1, 10) = ?
             """,
-            (study_day_id,),
-        ).fetchone()
+            (today.isoformat(),),
+        ).fetchone()[0]
 
     item = dict(word) if word is not None else None
-    if item is not None:
-        try:
-            item["phrases"] = json.loads(item["phrases"])
-        except (TypeError, json.JSONDecodeError):
-            item["phrases"] = []
+    if item:
+        item["level_label"] = level_label(int(item["level"]))
+    remaining_count = len(candidates)
+    progress_total = reviewed_today + remaining_count
+    progress_percent = (
+        round(reviewed_today / progress_total * 100) if progress_total else 100
+    )
 
     return render_template(
         "study.html",
         day=day,
         word=item,
-        word_count=word_count,
-        stats=stats,
+        selected_word_count=selected_word_count,
+        reviewed_today=reviewed_today,
+        remaining_count=remaining_count,
+        progress_percent=progress_percent,
     )
 
 
 @app.post("/study/<int:study_day_id>/review")
 def save_review(study_day_id: int):
     word_id = request.form.get("word_id", type=int)
-    result = request.form.get("result", "")
+    rating = request.form.get("rating", "")
+    today = date.today()
 
-    if not word_id or result not in {"known", "unknown"}:
+    if not word_id:
         flash("学习记录无效，请重新选择。", "error")
         return redirect(url_for("study", study_day_id=study_day_id))
 
     with get_db() as connection:
-        word_exists = connection.execute(
-            "SELECT 1 FROM words WHERE id = ? AND study_day_id = ?",
-            (word_id, study_day_id),
+        word = connection.execute(
+            """
+            SELECT * FROM words
+            WHERE id = ?
+              AND (
+                    (study_day_id = ? AND last_reviewed IS NULL)
+                    OR COALESCE(NULLIF(next_review_date, ''), ?) <= ?
+                  )
+            """,
+            (word_id, study_day_id, today.isoformat(), today.isoformat()),
         ).fetchone()
-        if word_exists is None:
-            flash("该单词不属于当前学习日期。", "error")
+        if word is None:
+            flash("该单词当前不在复习队列中。", "error")
+            return redirect(url_for("study", study_day_id=study_day_id))
+
+        try:
+            update = calculate_review_update(dict(word), rating, today=today)
+        except ValueError as exc:
+            flash(str(exc), "error")
             return redirect(url_for("study", study_day_id=study_day_id))
 
         connection.execute(
-            "INSERT INTO learning_records (word_id, result) VALUES (?, ?)",
-            (word_id, result),
+            """
+            UPDATE words
+            SET level = ?, correct_count = ?, wrong_count = ?,
+                last_reviewed = ?, next_review_date = ?
+            WHERE id = ?
+            """,
+            (
+                update.level,
+                update.correct_count,
+                update.wrong_count,
+                update.last_reviewed,
+                update.next_review_date,
+                word_id,
+            ),
+        )
+        record_result = "unknown" if rating in {"again", "vague"} else "known"
+        connection.execute(
+            """
+            INSERT INTO learning_records (word_id, result, reviewed_at)
+            VALUES (?, ?, ?)
+            """,
+            (word_id, record_result, update.last_reviewed),
         )
 
-    message = "已记录：认识" if result == "known" else "已记录：不认识"
-    flash(message, "success")
+    rating_labels = {
+        "again": "不会",
+        "vague": "模糊",
+        "known": "认识",
+        "easy": "熟练",
+    }
+    flash(f"已记录：{rating_labels[rating]}", "success")
     return redirect(
         url_for(
             "study",

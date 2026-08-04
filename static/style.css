@@ -102,16 +102,28 @@ small { color: var(--muted); }
 .study-stats strong, .study-stats span { display: block; }
 .study-stats strong { color: var(--green-dark); font-size: 24px; }
 .study-stats span { margin-top: 3px; color: var(--muted); font-size: 13px; }
+.progress-track { height: 8px; margin: -8px 0 18px; overflow: hidden; border-radius: 999px; background: #dfe6df; }
+.progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), #70a180); transition: width .35s ease; }
 .recall-card { padding: clamp(26px, 6vw, 54px); border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: 0 12px 40px rgb(36 48 39 / 8%); text-align: center; }
+.mastery-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; color: var(--muted); font-size: 13px; }
+.mastery-label { font-weight: 800; }
+.mastery-dots { display: flex; gap: 5px; }
+.mastery-dots i { width: 9px; height: 9px; border-radius: 50%; background: #d9ded9; }
+.mastery-dots i.active { background: var(--green); }
 .recall-label { margin: 0; color: var(--muted); }
 .recall-card h2 { margin: 18px 0 30px; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(42px, 10vw, 76px); }
+.review-meta { margin: -18px 0 28px; color: var(--muted); font-size: 13px; }
 .reveal-button { max-width: 260px; }
 .answer { margin-top: 30px; padding-top: 25px; border-top: 1px solid var(--line); text-align: left; }
 .answer h3 { margin: 22px 0 0; font-size: 15px; }
-.review-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 28px; }
-.unknown-button { background: #a7473f; }
-.unknown-button:hover { background: #85352f; }
+.review-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 28px; }
+.again-button { background: #a7473f; }
+.again-button:hover { background: #85352f; }
+.vague-button { background: #b47a35; }
+.vague-button:hover { background: #906029; }
 .known-button { background: var(--green); }
+.easy-button { background: #315c83; }
+.easy-button:hover { background: #244867; }
 
 .dates-page { width: min(820px, calc(100% - 32px)); }
 .dates-header { margin-bottom: 28px; }
@@ -158,6 +170,7 @@ small { color: var(--muted); }
     .page { padding-top: 36px; }
     .forms-grid { grid-template-columns: 1fr; }
     .messages { top: 10px; right: 16px; }
+    .review-actions { grid-template-columns: 1fr 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

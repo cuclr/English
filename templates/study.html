@@ -24,21 +24,34 @@
         {% endwith %}
 
         <header class="study-header">
-            <p class="eyebrow">RECALL MODE</p>
-            <h1>背诵模式</h1>
-            <p>当天共 {{ word_count }} 个单词。先回忆，再查看答案。</p>
+            <p class="eyebrow">SPACED REPETITION</p>
+            <h1>间隔复习</h1>
+            <p>当前日期有 {{ selected_word_count }} 个单词，到期旧词也会加入抽取队列。</p>
         </header>
 
         <section class="study-stats" aria-label="本日学习统计">
-            <div><strong>{{ stats.total }}</strong><span>已作答</span></div>
-            <div><strong>{{ stats.known }}</strong><span>认识</span></div>
-            <div><strong>{{ stats.unknown }}</strong><span>不认识</span></div>
+            <div><strong>{{ progress_percent }}%</strong><span>今日进度</span></div>
+            <div><strong>{{ reviewed_today }}</strong><span>今日作答</span></div>
+            <div><strong>{{ remaining_count }}</strong><span>当前待复习</span></div>
         </section>
+        <div class="progress-track" role="progressbar" aria-valuenow="{{ progress_percent }}" aria-valuemin="0" aria-valuemax="100" aria-label="今日复习进度">
+            <span style="width: {{ progress_percent }}%"></span>
+        </div>
 
         {% if word %}
             <article class="recall-card">
+                <div class="mastery-row">
+                    <span class="mastery-label">等级 {{ word.level }} · {{ word.level_label }}</span>
+                    <span class="mastery-dots" aria-label="熟练度 {{ word.level }} 级">
+                        {% for number in range(1, 6) %}<i class="{% if number <= word.level %}active{% endif %}"></i>{% endfor %}
+                    </span>
+                </div>
                 <p class="recall-label">这个单词是什么意思？</p>
                 <h2>{{ word.word }}</h2>
+                <p class="review-meta">
+                    答对 {{ word.correct_count }} 次 · 答错 {{ word.wrong_count }} 次
+                    {% if word.source_study_date != day.study_date %} · 来自 {{ word.source_study_date }}{% endif %}
+                </p>
 
                 <button id="reveal-button" class="reveal-button" type="button">显示释义</button>
 
@@ -54,14 +67,16 @@
 
                 <form class="review-actions" method="post" action="{{ url_for('save_review', study_day_id=day.id) }}">
                     <input type="hidden" name="word_id" value="{{ word.id }}">
-                    <button class="unknown-button" name="result" value="unknown" disabled>不认识</button>
-                    <button class="known-button" name="result" value="known" disabled>认识</button>
+                    <button class="again-button" name="rating" value="again" disabled>不会</button>
+                    <button class="vague-button" name="rating" value="vague" disabled>模糊</button>
+                    <button class="known-button" name="rating" value="known" disabled>认识</button>
+                    <button class="easy-button" name="rating" value="easy" disabled>熟练</button>
                 </form>
             </article>
         {% else %}
             <div class="empty-state">
-                <p>这个日期下还没有单词，请先返回词库添加。</p>
-                <a class="text-link" href="{{ url_for('index') }}">返回添加单词</a>
+                <p>{% if selected_word_count %}今天到期的单词已经复习完成。{% else %}这个日期下还没有单词。{% endif %}</p>
+                <a class="text-link" href="{{ url_for('index') }}">返回每日词库</a>
             </div>
         {% endif %}
     </main>
@@ -76,7 +91,7 @@
             answer.hidden = false;
             revealButton.hidden = true;
             reviewButtons.forEach((button) => { button.disabled = false; });
-            reviewButtons[1].focus();
+            reviewButtons[2].focus();
         });
     </script>
     {% endif %}
