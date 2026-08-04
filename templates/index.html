@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>每日词库</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="page">
+        <header class="hero">
+            <p class="eyebrow">VOCABULARY NOTEBOOK</p>
+            <h1>每日词库</h1>
+            <p>按学习日期整理并保存你的单词。</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="messages" aria-live="polite">
+                    {% for category, message in messages %}
+                        <p class="message {{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+
+        <section class="forms-grid">
+            <form class="card" method="post" action="{{ url_for('create_day') }}">
+                <h2>1. 创建学习日期</h2>
+                <label for="study_date">日期</label>
+                <input id="study_date" name="study_date" type="date" required>
+                <button type="submit">创建日期</button>
+            </form>
+
+            <form class="card" method="post" action="{{ url_for('add_word') }}">
+                <h2>2. 添加单词</h2>
+                <label for="study_day_id">学习日期</label>
+                <select id="study_day_id" name="study_day_id" required {% if not days %}disabled{% endif %}>
+                    <option value="">请选择日期</option>
+                    {% for day in days %}
+                        <option value="{{ day.id }}">{{ day.study_date }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="word">英文单词</label>
+                <input id="word" name="word" type="text" placeholder="例如：serendipity" autocomplete="off" required>
+                <button type="submit" {% if not days %}disabled{% endif %}>保存单词</button>
+                {% if not days %}<small>请先创建一个学习日期。</small>{% endif %}
+            </form>
+        </section>
+
+        <section class="library">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">YOUR COLLECTION</p>
+                    <h2>每日词库</h2>
+                </div>
+                <span>{{ days|length }} 个学习日</span>
+            </div>
+
+            {% if days %}
+                <div class="day-list">
+                    {% for day in days %}
+                        <article class="day-card">
+                            <div class="day-title">
+                                <h3>{{ day.study_date }}</h3>
+                                <span>{{ day.word_count }} 个单词</span>
+                            </div>
+                            {% set day_words = words_by_day.get(day.id, []) %}
+                            {% if day_words %}
+                                <ul>
+                                    {% for item in day_words %}
+                                        <li>{{ item.word }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="empty-day">还没有添加单词。</p>
+                            {% endif %}
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <p>还没有学习记录，从创建今天的日期开始吧。</p>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
