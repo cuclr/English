@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import json
 import sqlite3
@@ -12,13 +12,18 @@ from spaced_repetition import (
     choose_weighted_word,
     level_label,
 )
+from remote_access import RemoteAccessManager
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "instance" / "vocabulary.db"
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "dev-only-change-me"
+remote_access_manager = RemoteAccessManager(
+    BASE_DIR / "instance" / "remote_access.json"
+)
+app.config["SECRET_KEY"] = remote_access_manager.secret_key()
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 book_manager = BookManager(BASE_DIR)
 _pdf_searcher: PdfSearcher | None = None
 _pdf_searcher_path: Path | None = None
@@ -32,6 +37,53 @@ class DatabaseConnection(sqlite3.Connection):
             return super().__exit__(exc_type, exc_value, traceback)
         finally:
             self.close()
+
+
+@app.before_request
+def require_access_password():
+    """Require a password whenever remote access has been configured."""
+    if app.config.get("TESTING") and not app.config.get("FORCE_REMOTE_AUTH"):
+        return None
+    if request.endpoint in {"login", "health_check", "static"}:
+        return None
+    if not remote_access_manager.is_configured():
+        return None
+    if session.get("access_authenticated") is True:
+        return None
+    return redirect(url_for("login", next=request.full_path.rstrip("?")))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Authenticate browsers before allowing access to personal study data."""
+    if not remote_access_manager.is_configured():
+        return render_template("login.html", configuration_missing=True), 503
+
+    error = None
+    if request.method == "POST":
+        if remote_access_manager.verify_password(request.form.get("password", "")):
+            session.clear()
+            session["access_authenticated"] = True
+            session.permanent = True
+            destination = request.form.get("next", "")
+            if not destination.startswith("/") or destination.startswith("//"):
+                destination = url_for("index")
+            return redirect(destination)
+        error = "密码不正确，请重新输入。"
+
+    return render_template(
+        "login.html",
+        configuration_missing=False,
+        error=error,
+        next_url=request.form.get("next")
+        or request.args.get("next", url_for("index")),
+    )
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def get_db() -> sqlite3.Connection:

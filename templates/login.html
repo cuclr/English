@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 · 每日词库</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="login-page">
+        <section class="login-card">
+            <p class="eyebrow">PRIVATE VOCABULARY</p>
+            <h1>每日词库</h1>
+            {% if configuration_missing %}
+                <p class="login-intro">远程访问尚未完成安全配置，请先在电脑上运行 <code>setup_remote_access.bat</code>。</p>
+            {% else %}
+                <p class="login-intro">请输入你在电脑上设置的访问密码。</p>
+                {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+                <form method="post" action="{{ url_for('login') }}">
+                    <input type="hidden" name="next" value="{{ next_url }}">
+                    <label for="password">访问密码</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+                    <button type="submit">进入词库</button>
+                </form>
+                <small>登录状态会在此浏览器中保留 30 天。</small>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

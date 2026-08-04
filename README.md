@@ -27,6 +27,7 @@
 - 在设置页查看和切换当前 PDF 词书
 - 在保留单词和日期的前提下重置全部复习进度
 - 使用更简洁的日期选择提示，并在设置页切换本地主题颜色
+- 适配手机屏幕，并通过带密码保护的 HTTPS 地址远程访问
 
 ## 主题颜色
 
@@ -101,6 +102,42 @@ python app.py
 
 数据库会在首次运行时自动创建于 `instance/vocabulary.db`。PDF 只在用户查询时读取，
 不会被批量导入数据库；SQLite 只保存用户添加的词条结果。
+
+## 免费手机远程访问
+
+本项目使用 **Tailscale Funnel** 将电脑上的本地 Flask 服务转发为 HTTPS 地址。手机端不需要安装 App，使用任意现代浏览器即可访问。Tailscale Personal 套餐可免费使用，SQLite 数据库、PDF 词书和访问密码仍然只保存在本机。
+
+远程地址属于公网地址，因此项目会在配置完成后为本地和远程页面统一启用密码登录。密码只以加盐哈希形式保存在 `instance/remote_access.json`，不会保存明文，也不会提交到 GitHub。登录状态默认保留 30 天。
+
+### 第一次配置
+
+1. 在电脑上从 <https://tailscale.com/download/windows> 安装 Tailscale。
+2. 登录 Tailscale，选择免费的 Personal 用途；手机不需要安装 Tailscale。
+3. 双击项目根目录中的 `setup_remote_access.bat`。第一次运行时会显示密码设置窗口，请设置一个至少 8 个字符的访问密码。
+4. Tailscale 可能打开一次网页，请确认启用 Funnel 和 HTTPS。
+5. 脚本会显示固定的 `https://...ts.net` 地址，在手机浏览器中收藏该地址并输入访问密码。
+
+如果普通双击提示权限不足，请右键 `setup_remote_access.bat`，选择“以管理员身份运行”。更换访问密码可在项目目录执行：
+
+```powershell
+.\.venv\Scripts\python.exe remote_access.py password-gui
+```
+
+### 日常使用
+
+1. 在电脑上双击桌面 `TOOLS/English Vocabulary`，照常启动 Flask。
+2. 保持电脑开机、联网，并保持标题为 `English Vocabulary` 的命令窗口运行。
+3. 手机连接任意可用网络，直接打开收藏的 HTTPS 地址。
+
+双击 `show_remote_access.bat` 可以随时重新查看手机访问地址。Flask 仍然只监听 `127.0.0.1:5000`，不会开放局域网端口，也不需要设置路由器端口转发。
+
+### 关闭远程访问
+
+- 关闭 `English Vocabulary` 命令窗口：停止 Flask，手机暂时无法访问；下次启动应用后会恢复。
+- 双击 `stop_remote_access.bat`：关闭 Funnel 公网入口，但不删除密码、单词或学习记录。需要恢复时重新运行 `setup_remote_access.bat`。
+- 只关闭电脑浏览器或手机页面不会停止电脑上的 Flask 服务。
+
+Tailscale Funnel 当前为 Beta 服务并有非自定义带宽限制，适合这个低流量的个人工具。任何能够打开公网地址的人都能看到登录页，因此请使用不与其他网站重复的密码，不要把地址和密码公开分享。
 
 ## 同步到 GitHub
 

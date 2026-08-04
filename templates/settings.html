@@ -11,7 +11,7 @@
     <main class="page settings-page">
         <nav class="study-nav">
             <a href="{{ url_for('index') }}">← 返回主界面</a>
-            <span>本地设置</span>
+            {% if session.get('access_authenticated') %}<a href="{{ url_for('logout') }}">退出登录</a>{% else %}<span>本地设置</span>{% endif %}
         </nav>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
