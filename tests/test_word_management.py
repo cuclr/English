@@ -162,6 +162,12 @@ class WordManagementTest(unittest.TestCase):
         self.assertIn("sessionStorage", html)
         self.assertIn("wordInput.focus()", html)
 
+    def test_empty_date_input_uses_friendly_prompt(self):
+        html = self.client.get("/").get_data(as_text=True)
+
+        self.assertIn("请选择日期", html)
+        self.assertIn('class="date-input-placeholder"', html)
+
 
 if __name__ == "__main__":
     unittest.main()

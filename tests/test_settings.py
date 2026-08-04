@@ -64,6 +64,9 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("first", html)
         self.assertIn("second", html)
         self.assertIn("当前使用", html)
+        self.assertIn("主题颜色", html)
+        self.assertEqual(html.count("data-theme-option="), 4)
+        self.assertIn("theme.js", html)
 
         response = self.client.post(
             "/settings/book",

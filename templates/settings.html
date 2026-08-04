@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>设置</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -26,8 +27,35 @@
         <header class="settings-header">
             <p class="eyebrow">SETTINGS</p>
             <h1>设置</h1>
-            <p>管理本地词书和学习进度。</p>
+            <p>管理外观、本地词书和学习进度。</p>
         </header>
+
+        <section class="settings-section">
+            <div class="settings-title">
+                <div>
+                    <h2>主题颜色</h2>
+                    <p>选择一组喜欢的配色，仅保存在当前浏览器中。</p>
+                </div>
+            </div>
+            <div class="theme-options" role="group" aria-label="主题颜色">
+                <button class="theme-option" type="button" data-theme-option="default" aria-pressed="false">
+                    <span class="theme-swatch theme-swatch-default" aria-hidden="true"></span>
+                    <span><strong>原始绿</strong><small>默认配色</small></span>
+                </button>
+                <button class="theme-option" type="button" data-theme-option="ocean" aria-pressed="false">
+                    <span class="theme-swatch theme-swatch-ocean" aria-hidden="true"></span>
+                    <span><strong>海湾蓝</strong><small>清爽安静</small></span>
+                </button>
+                <button class="theme-option" type="button" data-theme-option="violet" aria-pressed="false">
+                    <span class="theme-swatch theme-swatch-violet" aria-hidden="true"></span>
+                    <span><strong>薰衣紫</strong><small>柔和专注</small></span>
+                </button>
+                <button class="theme-option" type="button" data-theme-option="rose" aria-pressed="false">
+                    <span class="theme-swatch theme-swatch-rose" aria-hidden="true"></span>
+                    <span><strong>柔粉</strong><small>温暖轻盈</small></span>
+                </button>
+            </div>
+        </section>
 
         <section class="settings-section">
             <div class="settings-title">

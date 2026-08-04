@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>每日词库</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -41,7 +42,10 @@
             <form class="card" method="post" action="{{ url_for('create_day') }}">
                 <h2>1. 创建学习日期</h2>
                 <label for="study_date">日期</label>
-                <input id="study_date" name="study_date" type="date" required>
+                <div class="date-input-shell">
+                    <input id="study_date" name="study_date" type="date" required>
+                    <span class="date-input-placeholder" aria-hidden="true">请选择日期</span>
+                </div>
                 <button type="submit">创建日期</button>
             </form>
 
@@ -112,6 +116,15 @@
         const wordForm = document.querySelector('#word-entry-form');
         const wordInput = document.querySelector('#word');
         const continuousEntryKey = 'continuous-word-entry';
+        const dateInput = document.querySelector('#study_date');
+        const dateInputShell = dateInput?.closest('.date-input-shell');
+
+        const updateDateInputState = () => {
+            dateInputShell?.classList.toggle('has-value', Boolean(dateInput.value));
+        };
+        dateInput?.addEventListener('input', updateDateInputState);
+        dateInput?.addEventListener('change', updateDateInputState);
+        updateDateInputState();
 
         if (wordInput && sessionStorage.getItem(continuousEntryKey) === 'on') {
             window.requestAnimationFrame(() => wordInput.focus());
