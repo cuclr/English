@@ -75,7 +75,7 @@
                             {% if day_words %}
                                 <div class="word-list">
                                     {% for item in day_words %}
-                                        <section class="word-entry" style="--card-index: {{ loop.index0 }}">
+                                        <section class="word-entry">
                                             <div class="word-heading">
                                                 <h4>{{ item.word }}</h4>
                                                 <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
@@ -83,11 +83,6 @@
                                                 </form>
                                             </div>
                                             {% if item.definition %}<p class="definition">{{ item.definition }}</p>{% endif %}
-                                            {% if item.phrases %}
-                                                <ul class="phrases">
-                                                    {% for phrase in item.phrases %}<li>{{ phrase }}</li>{% endfor %}
-                                                </ul>
-                                            {% endif %}
                                         </section>
                                     {% endfor %}
                                 </div>

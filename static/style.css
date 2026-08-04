@@ -70,21 +70,12 @@ small { color: var(--muted); }
 .study-link, .text-link, .study-nav a { color: var(--green); font-weight: 800; text-decoration: none; }
 .study-link { padding: 8px 12px; border-radius: 8px; background: #e6eee8; }
 .study-link:hover, .text-link:hover, .study-nav a:hover { text-decoration: underline; }
-.word-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 18px; }
+.word-list { display: grid; gap: 12px; margin-top: 18px; }
 .word-entry {
-    position: relative;
-    padding: 20px;
-    overflow: hidden;
-    border: 1px solid #dbe4dc;
-    border-radius: 15px;
-    background: linear-gradient(145deg, #fffefb, #eef4ef);
-    box-shadow: 0 7px 22px rgb(36 48 39 / 6%);
-    animation: card-in .45s ease-out both;
-    animation-delay: calc(var(--card-index, 0) * 45ms);
-    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    padding: 16px;
+    border-radius: 12px;
+    background: #f1f4ee;
 }
-.word-entry::before { position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--green); content: ""; }
-.word-entry:hover { transform: translateY(-3px); border-color: #b8cdbd; box-shadow: 0 13px 28px rgb(36 48 39 / 10%); }
 .word-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .word-heading h4 { margin: 0; color: var(--green-dark); font-family: Georgia, serif; font-size: 22px; }
 .word-heading span { color: var(--muted); font-size: 12px; }
@@ -127,11 +118,6 @@ small { color: var(--muted); }
     to { opacity: 0; transform: translateX(24px); }
 }
 
-@keyframes card-in {
-    from { opacity: 0; transform: translateY(14px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 @media (max-width: 480px) {
     .day-title { align-items: flex-start; }
     .day-actions { align-items: flex-end; flex-direction: column; }
@@ -141,7 +127,6 @@ small { color: var(--muted); }
     .page { padding-top: 36px; }
     .forms-grid { grid-template-columns: 1fr; }
     .messages { top: 10px; right: 16px; }
-    .word-list { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

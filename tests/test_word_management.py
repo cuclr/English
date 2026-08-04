@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -90,6 +91,31 @@ class WordManagementTest(unittest.TestCase):
             f'value="{self.second_day_id}" selected',
             html,
         )
+
+    def test_library_hides_phrases_but_study_mode_keeps_them(self):
+        phrase = "example phrase 示例词组"
+        with vocabulary_app.get_db() as connection:
+            connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition, phrases)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    self.first_day_id,
+                    "example",
+                    "n. 例子",
+                    json.dumps([phrase], ensure_ascii=False),
+                ),
+            )
+
+        library_html = self.client.get("/").get_data(as_text=True)
+        study_html = self.client.get(
+            f"/study/{self.first_day_id}"
+        ).get_data(as_text=True)
+
+        self.assertIn("n. 例子", library_html)
+        self.assertNotIn(phrase, library_html)
+        self.assertIn(phrase, study_html)
 
 
 if __name__ == "__main__":
