@@ -88,9 +88,63 @@ def get_pdf_searcher() -> PdfSearcher:
     return _pdf_searcher
 
 
+def deserialize_word(row: sqlite3.Row) -> dict:
+    """Convert a stored word row into template-friendly data."""
+    item = dict(row)
+    try:
+        item["phrases"] = json.loads(item["phrases"])
+    except (TypeError, json.JSONDecodeError):
+        item["phrases"] = []
+    return item
+
+
+def get_selected_day(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    """Return the selected day, falling back to the most recent day."""
+    selected_day_id = session.get("selected_day_id")
+    day = None
+    if selected_day_id:
+        day = connection.execute(
+            "SELECT id, study_date FROM study_days WHERE id = ?",
+            (selected_day_id,),
+        ).fetchone()
+    if day is None:
+        day = connection.execute(
+            "SELECT id, study_date FROM study_days ORDER BY study_date DESC LIMIT 1"
+        ).fetchone()
+        session["selected_day_id"] = day["id"] if day else None
+    return day
+
+
 @app.route("/")
 def index():
     with get_db() as connection:
+        active_day = get_selected_day(connection)
+        days_count = connection.execute("SELECT COUNT(*) FROM study_days").fetchone()[0]
+        words = []
+        if active_day:
+            words = connection.execute(
+                """
+                SELECT id, study_day_id, word, definition, phrases, source_page
+                FROM words
+                WHERE study_day_id = ?
+                ORDER BY id ASC
+                """,
+                (active_day["id"],),
+            ).fetchall()
+
+    active_words = [deserialize_word(word) for word in words]
+    return render_template(
+        "index.html",
+        active_day=active_day,
+        active_words=active_words,
+        days_count=days_count,
+    )
+
+
+@app.route("/dates")
+def date_library():
+    with get_db() as connection:
+        active_day = get_selected_day(connection)
         days = connection.execute(
             """
             SELECT study_days.id, study_days.study_date,
@@ -101,7 +155,6 @@ def index():
             ORDER BY study_days.study_date DESC
             """
         ).fetchall()
-
         words = connection.execute(
             """
             SELECT id, study_day_id, word, definition, phrases, source_page
@@ -110,27 +163,12 @@ def index():
             """
         ).fetchall()
 
-    available_day_ids = {day["id"] for day in days}
-    selected_day_id = session.get("selected_day_id")
-    if selected_day_id not in available_day_ids:
-        selected_day_id = days[0]["id"] if days else None
-        session["selected_day_id"] = selected_day_id
-
-    words_by_day: dict[int, list[sqlite3.Row]] = {}
+    words_by_day: dict[int, list[dict]] = {}
     for word in words:
-        item = dict(word)
-        try:
-            item["phrases"] = json.loads(item["phrases"])
-        except (TypeError, json.JSONDecodeError):
-            item["phrases"] = []
+        item = deserialize_word(word)
         words_by_day.setdefault(item["study_day_id"], []).append(item)
 
-    return render_template(
-        "index.html",
-        days=days,
-        words_by_day=words_by_day,
-        selected_day_id=selected_day_id,
-    )
+    return render_template("dates.html", days=days, words_by_day=words_by_day, active_day=active_day)
 
 
 @app.post("/days")
@@ -241,24 +279,30 @@ def select_study_day():
         return "学习日期不存在。", 404
 
     session["selected_day_id"] = study_day_id
+    if request.form.get("redirect_to") == "index":
+        flash("已切换学习日期。", "success")
+        return redirect(url_for("index"))
     return "", 204
 
 
 @app.post("/words/<int:word_id>/delete")
 def delete_word(word_id: int):
+    next_endpoint = (
+        "date_library" if request.form.get("next") == "date_library" else "index"
+    )
     with get_db() as connection:
         word = connection.execute(
             "SELECT word, study_day_id FROM words WHERE id = ?", (word_id,)
         ).fetchone()
         if word is None:
             flash("要删除的单词不存在。", "error")
-            return redirect(url_for("index"))
+            return redirect(url_for(next_endpoint))
 
         connection.execute("DELETE FROM words WHERE id = ?", (word_id,))
 
     session["selected_day_id"] = word["study_day_id"]
     flash(f"已删除：{word['word']}", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for(next_endpoint))
 
 
 @app.route("/study/<int:study_day_id>")

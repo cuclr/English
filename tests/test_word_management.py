@@ -43,7 +43,7 @@ class WordManagementTest(unittest.TestCase):
 
         html = self.client.get("/").get_data(as_text=True)
         self.assertIn(
-            f'value="{self.first_day_id}" selected',
+            f'data-active-day-id="{self.first_day_id}"',
             html,
         )
 
@@ -88,7 +88,7 @@ class WordManagementTest(unittest.TestCase):
         html = response.get_data(as_text=True)
         self.assertIn("没有在词库中找到", html)
         self.assertIn(
-            f'value="{self.second_day_id}" selected',
+            f'data-active-day-id="{self.second_day_id}"',
             html,
         )
 
@@ -108,6 +108,10 @@ class WordManagementTest(unittest.TestCase):
                 ),
             )
 
+        self.client.post(
+            "/preferences/study-day",
+            data={"study_day_id": self.first_day_id},
+        )
         library_html = self.client.get("/").get_data(as_text=True)
         study_html = self.client.get(
             f"/study/{self.first_day_id}"
@@ -116,6 +120,47 @@ class WordManagementTest(unittest.TestCase):
         self.assertIn("n. 例子", library_html)
         self.assertNotIn(phrase, library_html)
         self.assertIn(phrase, study_html)
+
+    def test_main_page_only_shows_selected_day_and_dates_page_is_foldable(self):
+        with vocabulary_app.get_db() as connection:
+            connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition)
+                VALUES (?, 'firstword', '第一个日期')
+                """,
+                (self.first_day_id,),
+            )
+            connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition)
+                VALUES (?, 'secondword', '第二个日期')
+                """,
+                (self.second_day_id,),
+            )
+
+        response = self.client.post(
+            "/preferences/study-day",
+            data={
+                "study_day_id": self.first_day_id,
+                "redirect_to": "index",
+            },
+            follow_redirects=True,
+        )
+        main_html = response.get_data(as_text=True)
+        self.assertIn("firstword", main_html)
+        self.assertNotIn("secondword", main_html)
+
+        dates_html = self.client.get("/dates").get_data(as_text=True)
+        self.assertGreaterEqual(dates_html.count('<details class="date-accordion"'), 2)
+        self.assertIn("firstword", dates_html)
+        self.assertIn("secondword", dates_html)
+
+    def test_main_page_supports_continuous_word_entry(self):
+        html = self.client.get("/").get_data(as_text=True)
+
+        self.assertIn("continuous-word-entry", html)
+        self.assertIn("sessionStorage", html)
+        self.assertIn("wordInput.focus()", html)
 
 
 if __name__ == "__main__":
