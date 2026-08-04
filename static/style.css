@@ -201,7 +201,15 @@ small { color: var(--muted); }
 .reveal-button { max-width: 260px; }
 .answer { margin-top: 30px; padding-top: 25px; border-top: 1px solid var(--line); text-align: left; }
 .answer h3 { margin: 22px 0 0; font-size: 15px; }
-.review-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 28px; }
+.review-actions { margin-top: 28px; }
+.review-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.review-button { transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease; }
+.review-buttons.has-selection .review-button:not(.is-selected) { opacity: .55; }
+.review-button.is-selected { box-shadow: 0 0 0 3px var(--card), 0 0 0 6px rgb(var(--accent-rgb) / 34%); transform: translateY(-2px); }
+.review-confirmation { margin-top: 18px; padding: 14px; border: 1px solid var(--accent-border); border-radius: 12px; background: var(--accent-surface); text-align: center; }
+.review-confirmation p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.review-confirmation strong { color: var(--green-dark); }
+.confirm-review-button { max-width: 320px; margin: 0; }
 .again-button { background: #a7473f; }
 .again-button:hover { background: #85352f; }
 .vague-button { background: #b47a35; }
@@ -321,7 +329,7 @@ small { color: var(--muted); }
     .page { padding-top: 36px; }
     .forms-grid { grid-template-columns: 1fr; }
     .messages { top: 10px; right: 16px; }
-    .review-actions { grid-template-columns: 1fr 1fr; }
+    .review-buttons { grid-template-columns: 1fr 1fr; }
     .theme-options { grid-template-columns: 1fr 1fr; }
 }
 

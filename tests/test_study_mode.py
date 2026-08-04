@@ -55,11 +55,25 @@ class StudyModeTest(unittest.TestCase):
         self.assertIn("beta", html)
         self.assertIn("第二", html)
         self.assertIn('id="answer" class="answer" hidden', html)
-        self.assertIn('value="again" disabled', html)
-        self.assertIn('value="vague" disabled', html)
-        self.assertIn('value="known" disabled', html)
-        self.assertIn('value="easy" disabled', html)
+        self.assertIn('data-rating="again" aria-pressed="false"', html)
+        self.assertIn('data-rating="vague" aria-pressed="false"', html)
+        self.assertIn('data-rating="known" aria-pressed="false"', html)
+        self.assertIn('data-rating="easy" aria-pressed="false"', html)
+        self.assertIn('id="selected-rating" type="hidden" name="rating"', html)
+        self.assertIn('id="review-confirmation"', html)
+        self.assertNotIn('value="known" disabled', html)
         self.assertIn("等级 1", html)
+
+    def test_rating_selection_reveals_answer_before_confirmation(self):
+        response = self.client.get(f"/study/{self.day_id}")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("selectedRating.value = rating", html)
+        self.assertIn("reviewConfirmation.hidden = false", html)
+        self.assertIn("revealAnswer();", html)
+        self.assertIn("如果判断有误，可以重新选择", html)
+        self.assertIn("确认并进入下一个", html)
 
     def test_review_is_saved(self):
         response = self.client.post(

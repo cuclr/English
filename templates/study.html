@@ -66,12 +66,19 @@
                     {% endif %}
                 </div>
 
-                <form class="review-actions" method="post" action="{{ url_for('save_review', study_day_id=day.id) }}">
+                <form id="review-form" class="review-actions" method="post" action="{{ url_for('save_review', study_day_id=day.id) }}">
                     <input type="hidden" name="word_id" value="{{ word.id }}">
-                    <button class="again-button" name="rating" value="again" disabled>不会</button>
-                    <button class="vague-button" name="rating" value="vague" disabled>模糊</button>
-                    <button class="known-button" name="rating" value="known" disabled>认识</button>
-                    <button class="easy-button" name="rating" value="easy" disabled>熟练</button>
+                    <input id="selected-rating" type="hidden" name="rating" value="">
+                    <div class="review-buttons" role="group" aria-label="选择熟悉程度">
+                        <button class="review-button again-button" type="button" data-rating="again" aria-pressed="false">不会</button>
+                        <button class="review-button vague-button" type="button" data-rating="vague" aria-pressed="false">模糊</button>
+                        <button class="review-button known-button" type="button" data-rating="known" aria-pressed="false">认识</button>
+                        <button class="review-button easy-button" type="button" data-rating="easy" aria-pressed="false">熟练</button>
+                    </div>
+                    <div id="review-confirmation" class="review-confirmation" aria-live="polite" hidden>
+                        <p>已选择：<strong id="selected-rating-label"></strong>。如果判断有误，可以重新选择。</p>
+                        <button id="confirm-review-button" class="confirm-review-button" type="submit">确认并进入下一个</button>
+                    </div>
                 </form>
             </article>
         {% else %}
@@ -86,13 +93,53 @@
     <script>
         const revealButton = document.querySelector('#reveal-button');
         const answer = document.querySelector('#answer');
-        const reviewButtons = document.querySelectorAll('.review-actions button');
+        const reviewForm = document.querySelector('#review-form');
+        const reviewButtonGroup = document.querySelector('.review-buttons');
+        const reviewButtons = document.querySelectorAll('.review-button');
+        const selectedRating = document.querySelector('#selected-rating');
+        const selectedRatingLabel = document.querySelector('#selected-rating-label');
+        const reviewConfirmation = document.querySelector('#review-confirmation');
+        const confirmReviewButton = document.querySelector('#confirm-review-button');
+        const ratingLabels = {
+            again: '不会',
+            vague: '模糊',
+            known: '认识',
+            easy: '熟练',
+        };
 
-        revealButton.addEventListener('click', () => {
+        const revealAnswer = () => {
             answer.hidden = false;
             revealButton.hidden = true;
-            reviewButtons.forEach((button) => { button.disabled = false; });
+        };
+
+        revealButton.addEventListener('click', () => {
+            revealAnswer();
             reviewButtons[2].focus();
+        });
+
+        reviewButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const rating = button.dataset.rating;
+                selectedRating.value = rating;
+                selectedRatingLabel.textContent = ratingLabels[rating];
+                reviewButtons.forEach((candidate) => {
+                    const isSelected = candidate === button;
+                    candidate.classList.toggle('is-selected', isSelected);
+                    candidate.setAttribute('aria-pressed', String(isSelected));
+                });
+                reviewButtonGroup.classList.add('has-selection');
+                reviewConfirmation.hidden = false;
+                revealAnswer();
+            });
+        });
+
+        reviewForm.addEventListener('submit', (event) => {
+            if (!selectedRating.value) {
+                event.preventDefault();
+                return;
+            }
+            confirmReviewButton.disabled = true;
+            confirmReviewButton.textContent = '正在保存…';
         });
     </script>
     {% endif %}
