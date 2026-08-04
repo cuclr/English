@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ day.study_date }} · 背诵模式</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="page study-page">
+        <nav class="study-nav">
+            <a href="{{ url_for('index') }}">← 返回每日词库</a>
+            <span>{{ day.study_date }}</span>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="messages" aria-live="polite">
+                    {% for category, message in messages %}
+                        <p class="message {{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+
+        <header class="study-header">
+            <p class="eyebrow">RECALL MODE</p>
+            <h1>背诵模式</h1>
+            <p>当天共 {{ word_count }} 个单词。先回忆，再查看答案。</p>
+        </header>
+
+        <section class="study-stats" aria-label="本日学习统计">
+            <div><strong>{{ stats.total }}</strong><span>已作答</span></div>
+            <div><strong>{{ stats.known }}</strong><span>认识</span></div>
+            <div><strong>{{ stats.unknown }}</strong><span>不认识</span></div>
+        </section>
+
+        {% if word %}
+            <article class="recall-card">
+                <p class="recall-label">这个单词是什么意思？</p>
+                <h2>{{ word.word }}</h2>
+
+                <button id="reveal-button" class="reveal-button" type="button">显示释义</button>
+
+                <div id="answer" class="answer" hidden>
+                    <p class="definition">{{ word.definition }}</p>
+                    {% if word.phrases %}
+                        <h3>重点词组</h3>
+                        <ul class="phrases">
+                            {% for phrase in word.phrases %}<li>{{ phrase }}</li>{% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+
+                <form class="review-actions" method="post" action="{{ url_for('save_review', study_day_id=day.id) }}">
+                    <input type="hidden" name="word_id" value="{{ word.id }}">
+                    <button class="unknown-button" name="result" value="unknown" disabled>不认识</button>
+                    <button class="known-button" name="result" value="known" disabled>认识</button>
+                </form>
+            </article>
+        {% else %}
+            <div class="empty-state">
+                <p>这个日期下还没有单词，请先返回词库添加。</p>
+                <a class="text-link" href="{{ url_for('index') }}">返回添加单词</a>
+            </div>
+        {% endif %}
+    </main>
+
+    {% if word %}
+    <script>
+        const revealButton = document.querySelector('#reveal-button');
+        const answer = document.querySelector('#answer');
+        const reviewButtons = document.querySelectorAll('.review-actions button');
+
+        revealButton.addEventListener('click', () => {
+            answer.hidden = false;
+            revealButton.hidden = true;
+            reviewButtons.forEach((button) => { button.disabled = false; });
+            reviewButtons[1].focus();
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

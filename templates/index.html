@@ -64,7 +64,12 @@
                         <article class="day-card">
                             <div class="day-title">
                                 <h3>{{ day.study_date }}</h3>
-                                <span>{{ day.word_count }} 个单词</span>
+                                <div class="day-actions">
+                                    <span>{{ day.word_count }} 个单词</span>
+                                    {% if day.word_count %}
+                                        <a class="study-link" href="{{ url_for('study', study_day_id=day.id) }}">开始背诵</a>
+                                    {% endif %}
+                                </div>
                             </div>
                             {% set day_words = words_by_day.get(day.id, []) %}
                             {% if day_words %}

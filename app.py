@@ -15,10 +15,20 @@ app.config["SECRET_KEY"] = "dev-only-change-me"
 _pdf_searcher: PdfSearcher | None = None
 
 
+class DatabaseConnection(sqlite3.Connection):
+    """Commit or roll back a context-managed connection, then always close it."""
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 def get_db() -> sqlite3.Connection:
     """Create a database connection whose rows can be accessed by column name."""
     DATABASE.parent.mkdir(exist_ok=True)
-    connection = sqlite3.connect(DATABASE)
+    connection = sqlite3.connect(DATABASE, factory=DatabaseConnection)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -44,6 +54,15 @@ def init_db() -> None:
                 source_page INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (study_day_id) REFERENCES study_days (id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS learning_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word_id INTEGER NOT NULL,
+                result TEXT NOT NULL CHECK (result IN ('known', 'unknown')),
+                reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (word_id) REFERENCES words (id)
                     ON DELETE CASCADE
             );
             """
@@ -167,6 +186,107 @@ def add_word():
         flash(f"已从 PDF 查询并保存：{entry.word}", "success")
 
     return redirect(url_for("index"))
+
+
+@app.route("/study/<int:study_day_id>")
+def study(study_day_id: int):
+    exclude_word_id = request.args.get("exclude_word_id", type=int)
+
+    with get_db() as connection:
+        day = connection.execute(
+            "SELECT id, study_date FROM study_days WHERE id = ?", (study_day_id,)
+        ).fetchone()
+        if day is None:
+            flash("学习日期不存在。", "error")
+            return redirect(url_for("index"))
+
+        word_count = connection.execute(
+            "SELECT COUNT(*) FROM words WHERE study_day_id = ?", (study_day_id,)
+        ).fetchone()[0]
+
+        if exclude_word_id and word_count > 1:
+            word = connection.execute(
+                """
+                SELECT id, word, definition, phrases
+                FROM words
+                WHERE study_day_id = ? AND id != ?
+                ORDER BY RANDOM()
+                LIMIT 1
+                """,
+                (study_day_id, exclude_word_id),
+            ).fetchone()
+        else:
+            word = connection.execute(
+                """
+                SELECT id, word, definition, phrases
+                FROM words
+                WHERE study_day_id = ?
+                ORDER BY RANDOM()
+                LIMIT 1
+                """,
+                (study_day_id,),
+            ).fetchone()
+
+        stats = connection.execute(
+            """
+            SELECT COUNT(learning_records.id) AS total,
+                   COALESCE(SUM(learning_records.result = 'known'), 0) AS known,
+                   COALESCE(SUM(learning_records.result = 'unknown'), 0) AS unknown
+            FROM learning_records
+            JOIN words ON words.id = learning_records.word_id
+            WHERE words.study_day_id = ?
+            """,
+            (study_day_id,),
+        ).fetchone()
+
+    item = dict(word) if word is not None else None
+    if item is not None:
+        try:
+            item["phrases"] = json.loads(item["phrases"])
+        except (TypeError, json.JSONDecodeError):
+            item["phrases"] = []
+
+    return render_template(
+        "study.html",
+        day=day,
+        word=item,
+        word_count=word_count,
+        stats=stats,
+    )
+
+
+@app.post("/study/<int:study_day_id>/review")
+def save_review(study_day_id: int):
+    word_id = request.form.get("word_id", type=int)
+    result = request.form.get("result", "")
+
+    if not word_id or result not in {"known", "unknown"}:
+        flash("学习记录无效，请重新选择。", "error")
+        return redirect(url_for("study", study_day_id=study_day_id))
+
+    with get_db() as connection:
+        word_exists = connection.execute(
+            "SELECT 1 FROM words WHERE id = ? AND study_day_id = ?",
+            (word_id, study_day_id),
+        ).fetchone()
+        if word_exists is None:
+            flash("该单词不属于当前学习日期。", "error")
+            return redirect(url_for("study", study_day_id=study_day_id))
+
+        connection.execute(
+            "INSERT INTO learning_records (word_id, result) VALUES (?, ?)",
+            (word_id, result),
+        )
+
+    message = "已记录：认识" if result == "known" else "已记录：不认识"
+    flash(message, "success")
+    return redirect(
+        url_for(
+            "study",
+            study_day_id=study_day_id,
+            exclude_word_id=word_id,
+        )
+    )
 
 
 init_db()
