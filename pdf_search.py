@@ -16,8 +16,10 @@ import fitz
 
 
 _WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
-_OCR_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z'_~:-]*$")
-_OCR_GAP_RE = re.compile(r"[_~:]+")
+_OCR_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z'_~:!-]*$")
+_OCR_GAP_RE = re.compile(r"[_~:!]+")
+_MIN_HEADING_HEIGHT = 11.5
+_HEADING_ROW_TOLERANCE = 12
 _CJK_RE = re.compile(r"[\u3400-\u9fff]")
 _BRACKET_RE = re.compile(r"[\[［].*?[\]］]")
 
@@ -58,7 +60,24 @@ class PdfSearcher:
                         compact_page_text = re.sub(r"[^a-z]", "", page_text)
                         if query not in page_text and query not in compact_page_text:
                             continue
-                        entry = self._extract_entry(document, page_index, query)
+                        positioned_words = page.get_text("words", sort=True)
+                        footer_lines: dict[tuple[int, int], list[str]] = {}
+                        for item in positioned_words:
+                            if item[1] < page.rect.height * 0.86:
+                                continue
+                            footer_lines.setdefault((item[5], item[6]), []).append(
+                                item[4]
+                            )
+                        footer_terms = {
+                            re.sub(r"[^a-z]", "", "".join(parts).lower())
+                            for parts in footer_lines.values()
+                        }
+                        entry = self._extract_entry(
+                            document,
+                            page_index,
+                            query,
+                            allow_fuzzy=query in footer_terms,
+                        )
                         if entry is not None:
                             return entry
             except (fitz.FileDataError, OSError) as exc:
@@ -66,7 +85,11 @@ class PdfSearcher:
         return None
 
     def _extract_entry(
-        self, document: fitz.Document, page_index: int, query: str
+        self,
+        document: fitz.Document,
+        page_index: int,
+        query: str,
+        allow_fuzzy: bool = False,
     ) -> PdfEntry | None:
         page = document[page_index]
         words = page.get_text("words", sort=True)
@@ -78,7 +101,9 @@ class PdfSearcher:
             (
                 i
                 for i, heading in enumerate(headings)
-                if self._heading_matches_query(str(heading["word"]), query)
+                if self._heading_matches_query(
+                    str(heading["word"]), query, allow_fuzzy=allow_fuzzy
+                )
             ),
             None,
         )
@@ -150,24 +175,39 @@ class PdfSearcher:
             if letter_count < 3 or (has_ocr_gap and item[0] > 130):
                 continue
             nearby = words[index + 1 : index + 8]
-            has_phonetic = any(
-                candidate[0] > item[0]
-                and abs(candidate[1] - item[1]) <= 9
-                and ("[" in candidate[4] or "［" in candidate[4])
+            phonetic_candidates = [
+                candidate
                 for candidate in nearby
+                if candidate[0] > item[0]
+                and abs(candidate[1] - item[1]) <= _HEADING_ROW_TOLERANCE
+                and ("[" in candidate[4] or "［" in candidate[4])
+            ]
+            if not phonetic_candidates:
+                continue
+            heading_height = item[3] - item[1]
+            phonetic_height = max(
+                candidate[3] - candidate[1]
+                for candidate in phonetic_candidates
             )
-            if has_phonetic:
-                headings.append(
-                    {
-                        "word": text,
-                        "top": item[1],
-                        "bottom": item[3],
-                    }
-                )
+            looks_like_display_text = (
+                heading_height >= phonetic_height * 1.15
+                or (heading_height >= _MIN_HEADING_HEIGHT and item[0] <= 110)
+            )
+            if not looks_like_display_text:
+                continue
+            headings.append(
+                {
+                    "word": text,
+                    "top": item[1],
+                    "bottom": item[3],
+                }
+            )
         return headings
 
     @staticmethod
-    def _heading_matches_query(heading_word: str, query: str) -> bool:
+    def _heading_matches_query(
+        heading_word: str, query: str, allow_fuzzy: bool = False
+    ) -> bool:
         """Match a query against headings damaged by the PDF's OCR layer.
 
         The book occasionally stores visible letters as ``_``, ``~`` or ``:``.
@@ -180,7 +220,7 @@ class PdfSearcher:
         pattern_parts: list[str] = []
         previous_was_gap = False
         for character in heading_word:
-            if character in "_~:":
+            if character in "_~:!":
                 if not previous_was_gap:
                     pattern_parts.append(r"[a-z]{0,4}")
                 previous_was_gap = True
@@ -193,7 +233,7 @@ class PdfSearcher:
         # Some OCR errors replace a real letter as well as inserting a gap
         # marker (for example ``insqir::__e`` for ``inspire``). Fuzzy matching
         # is deliberately restricted to marked headings and at most two edits.
-        if not _OCR_GAP_RE.search(heading_word):
+        if not allow_fuzzy or not _OCR_GAP_RE.search(heading_word):
             return False
         plain_heading = _OCR_GAP_RE.sub("", heading_word)
         if abs(len(plain_heading) - len(query)) > 4:
@@ -220,7 +260,11 @@ class PdfSearcher:
 
     @staticmethod
     def _extract_definition(words: list[tuple], heading_word: str, top: float) -> str:
-        heading_words = [item for item in words if abs(item[1] - top) <= 9]
+        heading_words = [
+            item
+            for item in words
+            if abs(item[1] - top) <= _HEADING_ROW_TOLERANCE
+        ]
         heading_text = " ".join(item[4] for item in sorted(heading_words, key=lambda x: x[0]))
         heading_text = re.sub(
             rf"^.*?{re.escape(heading_word)}",
@@ -230,7 +274,7 @@ class PdfSearcher:
             flags=re.I,
         )
         heading_text = _BRACKET_RE.sub("", heading_text, count=1)
-        return " ".join(heading_text.split()).strip(" -")
+        return " ".join(heading_text.split()).strip(" -_~:!")
 
     @staticmethod
     def _extract_phrases(
