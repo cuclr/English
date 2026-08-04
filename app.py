@@ -161,29 +161,54 @@ def add_word():
         return redirect(url_for("index"))
 
     if entry is None:
-        flash(f"PDF 词书中没有找到：{word}", "error")
+        flash(f"词书中没有找到：{word}", "error")
         return redirect(url_for("index"))
 
     try:
         with get_db() as connection:
-            connection.execute(
+            saved_phrases = json.dumps(entry.phrases, ensure_ascii=False)
+            existing = connection.execute(
                 """
-                INSERT INTO words
-                    (study_day_id, word, definition, phrases, source_page)
-                VALUES (?, ?, ?, ?, ?)
+                SELECT id FROM words
+                WHERE study_day_id = ? AND LOWER(word) = LOWER(?)
+                LIMIT 1
                 """,
-                (
-                    study_day_id,
-                    entry.word,
-                    entry.definition,
-                    json.dumps(entry.phrases, ensure_ascii=False),
-                    entry.page_number,
-                ),
-            )
+                (study_day_id, entry.word),
+            ).fetchone()
+            if existing:
+                connection.execute(
+                    """
+                    UPDATE words
+                    SET word = ?, definition = ?, phrases = ?, source_page = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        entry.word,
+                        entry.definition,
+                        saved_phrases,
+                        entry.page_number,
+                        existing["id"],
+                    ),
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO words
+                        (study_day_id, word, definition, phrases, source_page)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        study_day_id,
+                        entry.word,
+                        entry.definition,
+                        saved_phrases,
+                        entry.page_number,
+                    ),
+                )
     except sqlite3.IntegrityError:
         flash("所选学习日期不存在。", "error")
     else:
-        flash(f"已从 PDF 查询并保存：{entry.word}", "success")
+        flash(f"已保存：{entry.word}", "success")
 
     return redirect(url_for("index"))
 
@@ -293,4 +318,4 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

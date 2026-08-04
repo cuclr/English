@@ -44,7 +44,7 @@
 
                 <label for="word">英文单词</label>
                 <input id="word" name="word" type="text" placeholder="例如：serendipity" autocomplete="off" required>
-                <button type="submit" {% if not days %}disabled{% endif %}>在 PDF 中查询并保存</button>
+                <button type="submit" {% if not days %}disabled{% endif %}>查询并保存</button>
                 {% if not days %}<small>请先创建一个学习日期。</small>{% endif %}
             </form>
         </section>
@@ -78,7 +78,6 @@
                                         <section class="word-entry">
                                             <div class="word-heading">
                                                 <h4>{{ item.word }}</h4>
-                                                {% if item.source_page %}<span>PDF 第 {{ item.source_page }} 页</span>{% endif %}
                                             </div>
                                             {% if item.definition %}<p class="definition">{{ item.definition }}</p>{% endif %}
                                             {% if item.phrases %}

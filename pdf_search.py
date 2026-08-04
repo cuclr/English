@@ -55,7 +55,7 @@ class PdfSearcher:
                         page_text = page.get_text("text").lower()
                         if query not in page_text:
                             continue
-                        entry = self._extract_entry(page, query, page_index + 1)
+                        entry = self._extract_entry(document, page_index, query)
                         if entry is not None:
                             return entry
             except (fitz.FileDataError, OSError) as exc:
@@ -63,8 +63,9 @@ class PdfSearcher:
         return None
 
     def _extract_entry(
-        self, page: fitz.Page, query: str, page_number: int
+        self, document: fitz.Document, page_index: int, query: str
     ) -> PdfEntry | None:
+        page = document[page_index]
         words = page.get_text("words", sort=True)
         if not words:
             return None
@@ -88,15 +89,44 @@ class PdfSearcher:
         ]
 
         definition = self._extract_definition(entry_words, query, heading["top"])
-        phrases = self._extract_phrases(
-            entry_words,
-            query,
-            heading["bottom"] + 4,
-            page.rect.width,
-        )
+        phrase_sections = [
+            (entry_words, heading["bottom"] + 4, page.rect.width)
+        ]
+
+        # A word at the bottom of a page can continue on following pages. Read
+        # only until the next entry heading; this is still an on-demand lookup,
+        # not a persistent index or bulk import.
+        if target_index + 1 == len(headings):
+            for continuation_index in range(
+                page_index + 1, min(page_index + 3, len(document))
+            ):
+                continuation_page = document[continuation_index]
+                continuation_words = continuation_page.get_text("words", sort=True)
+                continuation_headings = self._find_headings(continuation_words)
+                cutoff = (
+                    continuation_headings[0]["top"] - 2
+                    if continuation_headings
+                    else continuation_page.rect.height - 20
+                )
+                section_words = [
+                    item for item in continuation_words if 20 <= item[1] < cutoff
+                ]
+                phrase_sections.append(
+                    (section_words, 20, continuation_page.rect.width)
+                )
+                if continuation_headings:
+                    break
+
+        phrases: list[str] = []
+        for section_words, body_top, page_width in phrase_sections:
+            for phrase in self._extract_phrases(
+                section_words, query, body_top, page_width
+            ):
+                if phrase not in phrases:
+                    phrases.append(phrase)
         if not definition:
             return None
-        return PdfEntry(query, definition, tuple(phrases), page_number)
+        return PdfEntry(query, definition, tuple(phrases[:8]), page_index + 1)
 
     @staticmethod
     def _find_headings(words: list[tuple]) -> list[dict[str, float | str]]:
@@ -104,7 +134,7 @@ class PdfSearcher:
         headings: list[dict[str, float | str]] = []
         for index, item in enumerate(words):
             text = item[4].strip().lower()
-            if not _WORD_RE.fullmatch(text):
+            if not _WORD_RE.fullmatch(text) or len(text) < 3:
                 continue
             nearby = words[index + 1 : index + 8]
             has_phonetic = any(
