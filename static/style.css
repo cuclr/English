@@ -14,6 +14,7 @@
     --accent-rgb: 47 107 79;
     --ambient-primary-rgb: 47 107 79;
     --ambient-secondary-rgb: 189 151 91;
+    --favorite-yellow: #f9a900;
 }
 
 :root[data-theme="ocean"] {
@@ -178,9 +179,9 @@ small { color: var(--muted); }
 .favorite-button:hover { background: transparent; transform: scale(1.1); }
 .favorite-button:disabled { cursor: wait; opacity: .62; }
 .favorite-button svg, .favorite-indicator svg { width: 27px; height: 27px; overflow: visible; }
-.favorite-button path, .favorite-indicator path { fill: transparent; stroke: #9a9488; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; transition: fill .16s ease, stroke .16s ease; }
-.favorite-button:hover path { stroke: #b47a35; }
-.favorite-button.is-active path, .favorite-indicator.is-active path { fill: #e0a33a; stroke: #c18525; }
+.favorite-button path, .favorite-indicator path { fill: transparent; stroke: var(--favorite-yellow); stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; transition: fill .16s ease, opacity .16s ease; }
+.favorite-button:hover path { opacity: .78; }
+.favorite-button.is-active path, .favorite-indicator.is-active path { fill: var(--favorite-yellow); stroke: var(--favorite-yellow); }
 .delete-form { flex: 0 0 auto; }
 .delete-button { width: auto; min-height: 32px; margin: 0; padding: 4px 9px; border: 1px solid #e5c7c3; background: transparent; color: #985047; font-size: 12px; }
 .delete-button:hover { background: #f8e4e1; color: #742e28; }

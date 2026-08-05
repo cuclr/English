@@ -225,9 +225,15 @@ class WordManagementTest(unittest.TestCase):
         initial_html = self.client.get("/").get_data(as_text=True)
         self.assertIn(f'/words/{word_id}/favorite', initial_html)
         self.assertIn("data-favorite-button", initial_html)
-        self.assertIn('stroke-linejoin: round', (
+        favorite_css = (
             Path(__file__).resolve().parents[1] / "static" / "style.css"
-        ).read_text(encoding="utf-8"))
+        ).read_text(encoding="utf-8")
+        self.assertIn("stroke-linejoin: round", favorite_css)
+        self.assertIn("--favorite-yellow: #f9a900", favorite_css)
+        self.assertIn(
+            "fill: var(--favorite-yellow); stroke: var(--favorite-yellow)",
+            favorite_css,
+        )
 
         favorite_response = self.client.post(
             f"/words/{word_id}/favorite",
