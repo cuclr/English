@@ -424,3 +424,25 @@
 ### Removed
 
 - 无。
+
+## 2026-08-05
+
+### Added
+
+- 新增多组音标清理回归测试，覆盖 PDF 第 22 页的 `decrease`。
+- 新增整本词书释义音标残留扫描。
+
+### Changed
+
+- 释义提取会删除同一词条中因不同词性产生的第二组音标，同时保留 `[C, U]` 等语法标签。
+- README 补充多组音标容错说明。
+- 修复 SQLite 中已经保存的 `decrease` 释义，不改动其复习进度和学习记录。
+
+### Fixed
+
+- 修复 `decrease` 的第二组音标被 PDF 隐藏文本层拆分后混入释义的问题。
+- 同步覆盖 `implement`、`estimate`、`transfer`、`contrast` 等同类多词性词条。
+
+### Removed
+
+- 无。

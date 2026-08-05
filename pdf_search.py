@@ -24,6 +24,9 @@ _MAX_HEADING_FRAGMENT_GAP = 3
 _MAX_HEADING_FRAGMENTS = 4
 _CJK_RE = re.compile(r"[\u3400-\u9fff]")
 _BRACKET_RE = re.compile(r"[\[［].*?[\]］]")
+_PHONETIC_BRACKET_RE = re.compile(
+    r"[\[［][^\]］]*(?:[:：'’\"”]|[英美中][.．])[^\]］]*[\]］]"
+)
 
 
 class PdfSearchError(RuntimeError):
@@ -303,8 +306,19 @@ class PdfSearcher:
             if abs(item[1] - top) <= _HEADING_ROW_TOLERANCE
             and item[0] >= right - 1
         ]
-        heading_text = " ".join(item[4] for item in sorted(heading_words, key=lambda x: x[0]))
-        heading_text = _BRACKET_RE.sub("", heading_text, count=1)
+        heading_text = " ".join(
+            item[4] for item in sorted(heading_words, key=lambda x: x[0])
+        )
+        # The first bracket after the heading is the main pronunciation. Some
+        # entries contain a second pronunciation for another part of speech;
+        # the PDF OCR layer may merge that bracket with the preceding Chinese
+        # definition. Remove clear phonetic brackets while retaining grammar
+        # labels such as ``[C, U]``.
+        leading_text = heading_text.lstrip()
+        leading_bracket = _BRACKET_RE.match(leading_text)
+        if leading_bracket:
+            leading_text = leading_text[leading_bracket.end() :]
+        heading_text = _PHONETIC_BRACKET_RE.sub("", leading_text)
         return " ".join(heading_text.split()).strip(" -_~:!")
 
     @staticmethod
