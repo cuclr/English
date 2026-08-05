@@ -97,10 +97,9 @@
                                 <section class="word-entry">
                                     <div class="word-heading">
                                         <div class="word-title-line">
-                                            <form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=item.id) }}">
-                                                <input type="hidden" name="next" value="index">
-                                                <button class="favorite-button {% if item.is_favorite %}is-active{% endif %}" type="submit" aria-label="{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %} {{ item.word }}" title="{% if item.is_favorite %}移出生词簿{% else %}加入生词簿{% endif %}">{% if item.is_favorite %}★{% else %}☆{% endif %}</button>
-                                            </form>
+                                            {% set favorite_item = item %}
+                                            {% set favorite_next = 'index' %}
+                                            {% include '_favorite_button.html' %}
                                             <h4>{{ item.word }}</h4>
                                         </div>
                                         <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
@@ -168,5 +167,6 @@
             }, 4500);
         });
     </script>
+    <script src="{{ url_for('static', filename='favorites.js') }}"></script>
 </body>
 </html>

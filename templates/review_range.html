@@ -48,10 +48,9 @@
                     <div class="favorite-word-list">
                         {% for item in favorite_words %}
                             <div class="favorite-word-row">
-                                <form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=item.id) }}">
-                                    <input type="hidden" name="next" value="custom_review_setup">
-                                    <button class="favorite-button is-active" type="submit" aria-label="取消收藏 {{ item.word }}" title="移出生词簿">★</button>
-                                </form>
+                                {% set favorite_item = item %}
+                                {% set favorite_next = 'custom_review_setup' %}
+                                {% include '_favorite_button.html' %}
                                 <div>
                                     <strong>{{ item.word }}</strong>
                                     <span>{{ item.definition }}</span>
@@ -156,5 +155,6 @@
         });
         updateSelection();
     </script>
+    <script src="{{ url_for('static', filename='favorites.js') }}"></script>
 </body>
 </html>

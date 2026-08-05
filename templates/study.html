@@ -59,7 +59,13 @@
                     </span>
                 </div>
                 <p class="recall-label">这个单词是什么意思？</p>
-                <h2>{{ word.word }}</h2>
+                <div class="recall-word-line">
+                    {% set favorite_item = word %}
+                    {% set favorite_next = 'index' %}
+                    {% set favorite_static = favorite_mode %}
+                    {% include '_favorite_button.html' %}
+                    <h2>{{ word.word }}</h2>
+                </div>
                 <p class="review-meta">
                     答对 {{ word.correct_count }} 次 · 答错 {{ word.wrong_count }} 次
                     {% if mastery_mode or word.source_study_date != day.study_date %} · 来自 {{ word.source_study_date }}{% endif %}
@@ -125,6 +131,7 @@
     </main>
 
     {% if word %}
+    <script src="{{ url_for('static', filename='favorites.js') }}"></script>
     <script>
         const revealButton = document.querySelector('#reveal-button');
         const answer = document.querySelector('#answer');

@@ -1,0 +1,16 @@
+{% if favorite_static | default(false) %}
+<span class="favorite-indicator is-active" aria-label="已收藏 {{ favorite_item.word }}" title="已在生词簿">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 3.4 14.55 8.25 19.95 9.05 16.05 12.95 16.95 18.35 12 15.85 7.05 18.35 7.95 12.95 4.05 9.05 9.45 8.25Z"></path>
+    </svg>
+</span>
+{% else %}
+<form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=favorite_item.id) }}" data-word-id="{{ favorite_item.id }}">
+    <input type="hidden" name="next" value="{{ favorite_next | default('index') }}">
+    <button class="favorite-button {% if favorite_item.is_favorite %}is-active{% endif %}" type="submit" data-favorite-button aria-pressed="{{ 'true' if favorite_item.is_favorite else 'false' }}" aria-label="{% if favorite_item.is_favorite %}取消收藏{% else %}收藏{% endif %} {{ favorite_item.word }}" title="{% if favorite_item.is_favorite %}移出生词簿{% else %}加入生词簿{% endif %}">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3.4 14.55 8.25 19.95 9.05 16.05 12.95 16.95 18.35 12 15.85 7.05 18.35 7.95 12.95 4.05 9.05 9.45 8.25Z"></path>
+        </svg>
+    </button>
+</form>
+{% endif %}

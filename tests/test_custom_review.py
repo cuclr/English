@@ -164,6 +164,10 @@ class CustomReviewTest(unittest.TestCase):
         study_html = self.client.get(start_response.location).get_data(as_text=True)
         self.assertIn("生词簿背诵", study_html)
         self.assertIn('action="/study/favorites/review"', study_html)
+        self.assertIn("favorite-indicator is-active", study_html)
+        self.assertNotIn(
+            f'action="/words/{self.alpha_id}/favorite"', study_html
+        )
 
         unknown_response = self.client.post(
             "/study/favorites/review",

@@ -66,6 +66,9 @@ class StudyModeTest(unittest.TestCase):
         self.assertIn('id="review-confirmation"', html)
         self.assertNotIn('value="known" disabled', html)
         self.assertIn("等级 1", html)
+        self.assertIn(f'/words/{self.first_word_id + 1}/favorite', html)
+        self.assertIn("data-favorite-button", html)
+        self.assertIn("favorites.js", html)
 
     def test_rating_selection_reveals_answer_before_confirmation(self):
         response = self.client.get(f"/study/{self.day_id}")

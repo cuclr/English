@@ -224,15 +224,26 @@ class WordManagementTest(unittest.TestCase):
 
         initial_html = self.client.get("/").get_data(as_text=True)
         self.assertIn(f'/words/{word_id}/favorite', initial_html)
-        self.assertIn("☆", initial_html)
+        self.assertIn("data-favorite-button", initial_html)
+        self.assertIn('stroke-linejoin: round', (
+            Path(__file__).resolve().parents[1] / "static" / "style.css"
+        ).read_text(encoding="utf-8"))
 
-        self.client.post(f"/words/{word_id}/favorite")
+        favorite_response = self.client.post(
+            f"/words/{word_id}/favorite",
+            headers={"Accept": "application/json"},
+        )
+        self.assertEqual(favorite_response.status_code, 200)
+        self.assertTrue(favorite_response.get_json()["is_favorite"])
         with vocabulary_app.get_db() as connection:
             is_favorite = connection.execute(
                 "SELECT is_favorite FROM words WHERE id = ?", (word_id,)
             ).fetchone()["is_favorite"]
         self.assertEqual(is_favorite, 1)
-        self.assertIn("★", self.client.get("/").get_data(as_text=True))
+        self.assertIn(
+            'favorite-button is-active',
+            self.client.get("/").get_data(as_text=True),
+        )
 
         self.client.post(f"/words/{word_id}/favorite")
         with vocabulary_app.get_db() as connection:
@@ -240,6 +251,15 @@ class WordManagementTest(unittest.TestCase):
                 "SELECT is_favorite FROM words WHERE id = ?", (word_id,)
             ).fetchone()["is_favorite"]
         self.assertEqual(is_favorite, 0)
+
+    def test_favorite_script_updates_without_page_reload(self):
+        script_path = Path(__file__).resolve().parents[1] / "static" / "favorites.js"
+        script = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("event.preventDefault()", script)
+        self.assertIn("await fetch(form.action", script)
+        self.assertIn("Accept: 'application/json'", script)
+        self.assertNotIn("window.location.reload", script)
 
     def test_success_toast_width_adapts_to_content(self):
         css_path = Path(__file__).resolve().parents[1] / "static" / "style.css"

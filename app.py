@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import sqlite3
 
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
 from book_manager import BookManager, BookManagerError
 from pdf_search import PdfSearchError, PdfSearcher
@@ -722,6 +722,7 @@ def delete_word(word_id: int):
 @app.post("/words/<int:word_id>/favorite")
 def toggle_favorite(word_id: int):
     """Toggle a word's persistent vocabulary-book membership."""
+    wants_json = request.accept_mimetypes.best == "application/json"
     next_endpoints = {
         "date_library": "date_library",
         "custom_review_setup": "custom_review_setup",
@@ -733,6 +734,8 @@ def toggle_favorite(word_id: int):
             (word_id,),
         ).fetchone()
         if word is None:
+            if wants_json:
+                return jsonify({"error": "要收藏的单词不存在。"}), 404
             flash("要收藏的单词不存在。", "error")
             return redirect(url_for(next_endpoint))
         is_favorite = 0 if int(word["is_favorite"]) else 1
@@ -743,7 +746,17 @@ def toggle_favorite(word_id: int):
 
     session["selected_day_id"] = word["study_day_id"]
     action = "已加入生词簿" if is_favorite else "已移出生词簿"
-    flash(f"{word['word']} {action}", "success")
+    message = f"{word['word']} {action}"
+    if wants_json:
+        return jsonify(
+            {
+                "word_id": word_id,
+                "word": word["word"],
+                "is_favorite": bool(is_favorite),
+                "message": message,
+            }
+        )
+    flash(message, "success")
     return redirect(url_for(next_endpoint))
 
 
@@ -766,7 +779,7 @@ def custom_review_setup():
         ).fetchone()[0]
         favorite_words = connection.execute(
             """
-            SELECT words.id, words.word, words.definition,
+            SELECT words.id, words.word, words.definition, words.is_favorite,
                    study_days.study_date AS source_study_date
             FROM words
             JOIN study_days ON study_days.id = words.study_day_id

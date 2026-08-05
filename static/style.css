@@ -173,9 +173,14 @@ small { color: var(--muted); }
 .word-heading span { color: var(--muted); font-size: 12px; }
 .word-title-line, .compact-word-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .favorite-form { flex: 0 0 auto; margin: 0; }
-.favorite-button { width: 28px; min-height: 28px; margin: 0; padding: 0; border: 0; background: transparent; color: #9a9488; font-size: 24px; line-height: 1; transition: color .16s ease, transform .16s ease; }
-.favorite-button:hover { background: transparent; color: #b47a35; transform: scale(1.1); }
-.favorite-button.is-active { color: #d49a32; }
+.favorite-button, .favorite-indicator { display: inline-grid; width: 30px; min-height: 30px; margin: 0; padding: 1px; place-items: center; border: 0; background: transparent; }
+.favorite-button { cursor: pointer; transition: transform .16s ease; }
+.favorite-button:hover { background: transparent; transform: scale(1.1); }
+.favorite-button:disabled { cursor: wait; opacity: .62; }
+.favorite-button svg, .favorite-indicator svg { width: 27px; height: 27px; overflow: visible; }
+.favorite-button path, .favorite-indicator path { fill: transparent; stroke: #9a9488; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; transition: fill .16s ease, stroke .16s ease; }
+.favorite-button:hover path { stroke: #b47a35; }
+.favorite-button.is-active path, .favorite-indicator.is-active path { fill: #e0a33a; stroke: #c18525; }
 .delete-form { flex: 0 0 auto; }
 .delete-button { width: auto; min-height: 32px; margin: 0; padding: 4px 9px; border: 1px solid #e5c7c3; background: transparent; color: #985047; font-size: 12px; }
 .delete-button:hover { background: #f8e4e1; color: #742e28; }
@@ -207,7 +212,8 @@ small { color: var(--muted); }
 .mastery-dots i { width: 9px; height: 9px; border-radius: 50%; background: #d9ded9; }
 .mastery-dots i.active { background: var(--green); }
 .recall-label { margin: 0; color: var(--muted); }
-.recall-card h2 { margin: 7px 0 10px; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(38px, 7vw, 56px); line-height: 1.05; }
+.recall-word-line { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 7px 0 10px; }
+.recall-card h2 { margin: 0; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(38px, 7vw, 56px); line-height: 1.05; }
 .review-meta { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
 .reveal-button { max-width: 240px; min-height: 40px; margin-top: 0; }
 .answer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); text-align: left; }
