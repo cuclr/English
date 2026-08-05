@@ -188,6 +188,66 @@ class WordManagementTest(unittest.TestCase):
         self.assertIn("请选择日期", html)
         self.assertIn('class="date-input-placeholder"', html)
 
+    def test_favorite_column_exists_and_defaults_to_false(self):
+        with vocabulary_app.get_db() as connection:
+            columns = {
+                row["name"]: row for row in connection.execute("PRAGMA table_info(words)")
+            }
+            connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition)
+                VALUES (?, 'favorite-default', '默认收藏状态')
+                """,
+                (self.first_day_id,),
+            )
+            is_favorite = connection.execute(
+                "SELECT is_favorite FROM words WHERE word = 'favorite-default'"
+            ).fetchone()["is_favorite"]
+
+        self.assertIn("is_favorite", columns)
+        self.assertEqual(is_favorite, 0)
+
+    def test_word_can_be_added_to_and_removed_from_favorites(self):
+        with vocabulary_app.get_db() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition)
+                VALUES (?, 'favorite-word', '收藏测试')
+                """,
+                (self.first_day_id,),
+            )
+            word_id = cursor.lastrowid
+        self.client.post(
+            "/preferences/study-day",
+            data={"study_day_id": self.first_day_id},
+        )
+
+        initial_html = self.client.get("/").get_data(as_text=True)
+        self.assertIn(f'/words/{word_id}/favorite', initial_html)
+        self.assertIn("☆", initial_html)
+
+        self.client.post(f"/words/{word_id}/favorite")
+        with vocabulary_app.get_db() as connection:
+            is_favorite = connection.execute(
+                "SELECT is_favorite FROM words WHERE id = ?", (word_id,)
+            ).fetchone()["is_favorite"]
+        self.assertEqual(is_favorite, 1)
+        self.assertIn("★", self.client.get("/").get_data(as_text=True))
+
+        self.client.post(f"/words/{word_id}/favorite")
+        with vocabulary_app.get_db() as connection:
+            is_favorite = connection.execute(
+                "SELECT is_favorite FROM words WHERE id = ?", (word_id,)
+            ).fetchone()["is_favorite"]
+        self.assertEqual(is_favorite, 0)
+
+    def test_success_toast_width_adapts_to_content(self):
+        css_path = Path(__file__).resolve().parents[1] / "static" / "style.css"
+        css = css_path.read_text(encoding="utf-8")
+
+        self.assertIn("width: max-content", css)
+        self.assertIn("width: fit-content", css)
+
 
 if __name__ == "__main__":
     unittest.main()

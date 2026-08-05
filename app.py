@@ -127,6 +127,8 @@ def init_db() -> None:
                 wrong_count INTEGER NOT NULL DEFAULT 0,
                 last_reviewed TEXT,
                 next_review_date TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_favorite IN (0, 1)),
                 FOREIGN KEY (study_day_id) REFERENCES study_days (id)
                     ON DELETE CASCADE
             );
@@ -156,6 +158,7 @@ def init_db() -> None:
             "wrong_count": "ALTER TABLE words ADD COLUMN wrong_count INTEGER NOT NULL DEFAULT 0",
             "last_reviewed": "ALTER TABLE words ADD COLUMN last_reviewed TEXT",
             "next_review_date": "ALTER TABLE words ADD COLUMN next_review_date TEXT",
+            "is_favorite": "ALTER TABLE words ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1))",
         }
         for column, statement in migrations.items():
             if column not in existing_columns:
@@ -290,6 +293,31 @@ def get_custom_review_candidates(
     return [deserialize_word(row) for row in rows]
 
 
+def get_favorite_review_candidates(
+    connection: sqlite3.Connection,
+    after_record_id: int,
+) -> list[dict]:
+    """Keep favorite unknown words active until marked known in this round."""
+    rows = connection.execute(
+        """
+        SELECT words.*, study_days.study_date AS source_study_date
+        FROM words
+        JOIN study_days ON study_days.id = words.study_day_id
+        WHERE words.is_favorite = 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM learning_records
+              WHERE learning_records.word_id = words.id
+                AND learning_records.id > ?
+                AND learning_records.result = 'known'
+          )
+        ORDER BY words.id ASC
+        """,
+        (after_record_id,),
+    ).fetchall()
+    return [deserialize_word(row) for row in rows]
+
+
 def get_repeat_review_state(study_day_id: int) -> dict | None:
     """Return a validated repeat-round state stored in the signed session."""
     state = session.get("repeat_review")
@@ -332,6 +360,20 @@ def get_custom_review_state() -> dict | None:
     }
 
 
+def get_favorite_review_state() -> dict | None:
+    """Return the baseline for the active favorite review round."""
+    state = session.get("favorite_review")
+    if not isinstance(state, dict):
+        return None
+    try:
+        after_record_id = int(state["after_record_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if after_record_id < 0:
+        return None
+    return {"after_record_id": after_record_id}
+
+
 def apply_review_result(
     connection: sqlite3.Connection,
     word: sqlite3.Row,
@@ -366,6 +408,39 @@ def apply_review_result(
     )
 
 
+def render_mastery_review(
+    word: dict | None,
+    candidates: list[dict],
+    selected_word_count: int,
+    scope_label: str,
+    mode: str,
+):
+    """Render a mastery-style round shared by date ranges and favorites."""
+    item = word if word is not None else None
+    if item:
+        item["level_label"] = level_label(int(item["level"]))
+    remaining_count = len(candidates)
+    mastered_count = selected_word_count - remaining_count
+    progress_percent = (
+        round(mastered_count / selected_word_count * 100)
+        if selected_word_count
+        else 100
+    )
+    return render_template(
+        "study.html",
+        day=None,
+        word=item,
+        selected_word_count=selected_word_count,
+        reviewed_count=mastered_count,
+        remaining_count=remaining_count,
+        progress_percent=progress_percent,
+        repeat_mode=False,
+        custom_mode=mode == "dates",
+        favorite_mode=mode == "favorites",
+        scope_label=scope_label,
+    )
+
+
 def get_selected_day(connection: sqlite3.Connection) -> sqlite3.Row | None:
     """Return the selected day, falling back to the most recent day."""
     selected_day_id = session.get("selected_day_id")
@@ -394,7 +469,7 @@ def index():
                 """
                 SELECT id, study_day_id, word, definition, meaning, phrases,
                        source_page, created_date, level, correct_count,
-                       wrong_count, last_reviewed, next_review_date
+                       wrong_count, last_reviewed, next_review_date, is_favorite
                 FROM words
                 WHERE study_day_id = ?
                 ORDER BY id ASC
@@ -489,7 +564,7 @@ def date_library():
             """
             SELECT id, study_day_id, word, definition, meaning, phrases,
                    source_page, created_date, level, correct_count,
-                   wrong_count, last_reviewed, next_review_date
+                   wrong_count, last_reviewed, next_review_date, is_favorite
             FROM words
             ORDER BY id ASC
             """
@@ -644,6 +719,34 @@ def delete_word(word_id: int):
     return redirect(url_for(next_endpoint))
 
 
+@app.post("/words/<int:word_id>/favorite")
+def toggle_favorite(word_id: int):
+    """Toggle a word's persistent vocabulary-book membership."""
+    next_endpoints = {
+        "date_library": "date_library",
+        "custom_review_setup": "custom_review_setup",
+    }
+    next_endpoint = next_endpoints.get(request.form.get("next"), "index")
+    with get_db() as connection:
+        word = connection.execute(
+            "SELECT word, study_day_id, is_favorite FROM words WHERE id = ?",
+            (word_id,),
+        ).fetchone()
+        if word is None:
+            flash("要收藏的单词不存在。", "error")
+            return redirect(url_for(next_endpoint))
+        is_favorite = 0 if int(word["is_favorite"]) else 1
+        connection.execute(
+            "UPDATE words SET is_favorite = ? WHERE id = ?",
+            (is_favorite, word_id),
+        )
+
+    session["selected_day_id"] = word["study_day_id"]
+    action = "已加入生词簿" if is_favorite else "已移出生词簿"
+    flash(f"{word['word']} {action}", "success")
+    return redirect(url_for(next_endpoint))
+
+
 @app.get("/study/range")
 def custom_review_setup():
     """Show the flexible date-range selector for a custom review round."""
@@ -658,11 +761,26 @@ def custom_review_setup():
             ORDER BY study_days.study_date DESC
             """
         ).fetchall()
+        favorite_count = connection.execute(
+            "SELECT COUNT(*) FROM words WHERE is_favorite = 1"
+        ).fetchone()[0]
+        favorite_words = connection.execute(
+            """
+            SELECT words.id, words.word, words.definition,
+                   study_days.study_date AS source_study_date
+            FROM words
+            JOIN study_days ON study_days.id = words.study_day_id
+            WHERE words.is_favorite = 1
+            ORDER BY study_days.study_date DESC, words.id ASC
+            """
+        ).fetchall()
     total_word_count = sum(int(day["word_count"]) for day in days)
     return render_template(
         "review_range.html",
         days=days,
         total_word_count=total_word_count,
+        favorite_count=favorite_count,
+        favorite_words=favorite_words,
     )
 
 
@@ -760,27 +878,12 @@ def custom_review_session():
             f"{selected_days[0]['study_date']} 至 {selected_days[-1]['study_date']}"
         )
 
-    item = word if word is not None else None
-    if item:
-        item["level_label"] = level_label(int(item["level"]))
-    remaining_count = len(candidates)
-    mastered_count = selected_word_count - remaining_count
-    progress_percent = (
-        round(mastered_count / selected_word_count * 100)
-        if selected_word_count
-        else 100
-    )
-    return render_template(
-        "study.html",
-        day=None,
-        word=item,
-        selected_word_count=selected_word_count,
-        reviewed_count=mastered_count,
-        remaining_count=remaining_count,
-        progress_percent=progress_percent,
-        repeat_mode=False,
-        custom_mode=True,
-        scope_label=scope_label,
+    return render_mastery_review(
+        word,
+        candidates,
+        selected_word_count,
+        scope_label,
+        mode="dates",
     )
 
 
@@ -831,6 +934,111 @@ def save_custom_review():
         flash(f"已记录：{RATING_LABELS[rating]}", "success")
     return redirect(
         url_for("custom_review_session", exclude_word_id=word_id)
+    )
+
+
+@app.post("/study/favorites")
+def start_favorite_review():
+    """Start or restart a mastery round containing every favorite word."""
+    with get_db() as connection:
+        favorite_count = connection.execute(
+            "SELECT COUNT(*) FROM words WHERE is_favorite = 1"
+        ).fetchone()[0]
+        latest_record_id = connection.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM learning_records"
+        ).fetchone()[0]
+    if not favorite_count:
+        flash("生词簿还是空的，请先收藏一些单词。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    session["favorite_review"] = {"after_record_id": latest_record_id}
+    flash(f"已开始生词簿背诵，本轮共 {favorite_count} 个单词。", "success")
+    return redirect(url_for("favorite_review_session"))
+
+
+@app.get("/study/favorites/session")
+def favorite_review_session():
+    """Draw favorite words until each is marked known in this round."""
+    state = get_favorite_review_state()
+    if state is None:
+        flash("生词簿背诵已失效，请重新开始。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    exclude_word_id = request.args.get("exclude_word_id", type=int)
+    today = date.today()
+    with get_db() as connection:
+        favorite_count = connection.execute(
+            "SELECT COUNT(*) FROM words WHERE is_favorite = 1"
+        ).fetchone()[0]
+        candidates = get_favorite_review_candidates(
+            connection,
+            state["after_record_id"],
+        )
+        word = choose_weighted_word(
+            candidates,
+            previous_word_id=exclude_word_id,
+            today=today,
+        )
+
+    if not favorite_count:
+        session.pop("favorite_review", None)
+        flash("生词簿还是空的，请先收藏一些单词。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    return render_mastery_review(
+        word,
+        candidates,
+        favorite_count,
+        f"生词簿 · {favorite_count} 个单词",
+        mode="favorites",
+    )
+
+
+@app.post("/study/favorites/review")
+def save_favorite_review():
+    """Save a favorite answer and retain unknown words for another draw."""
+    state = get_favorite_review_state()
+    if state is None:
+        flash("生词簿背诵已失效，请重新开始。", "error")
+        return redirect(url_for("custom_review_setup"))
+
+    word_id = request.form.get("word_id", type=int)
+    rating = request.form.get("rating", "")
+    if not word_id:
+        flash("学习记录无效，请重新选择。", "error")
+        return redirect(url_for("favorite_review_session"))
+
+    with get_db() as connection:
+        word = connection.execute(
+            """
+            SELECT * FROM words
+            WHERE id = ?
+              AND is_favorite = 1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM learning_records
+                  WHERE learning_records.word_id = words.id
+                    AND learning_records.id > ?
+                    AND learning_records.result = 'known'
+              )
+            """,
+            (word_id, state["after_record_id"]),
+        ).fetchone()
+        if word is None:
+            flash("该单词当前不在生词簿背诵队列中。", "error")
+            return redirect(url_for("favorite_review_session"))
+        try:
+            apply_review_result(connection, word, rating, date.today())
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("favorite_review_session"))
+
+    if rating in {"again", "vague"}:
+        flash(f"已记录：{RATING_LABELS[rating]}，这个单词稍后还会出现。", "success")
+    else:
+        flash(f"已记录：{RATING_LABELS[rating]}", "success")
+    return redirect(
+        url_for("favorite_review_session", exclude_word_id=word_id)
     )
 
 
@@ -901,6 +1109,7 @@ def study(study_day_id: int):
         progress_percent=progress_percent,
         repeat_mode=repeat_mode,
         custom_mode=False,
+        favorite_mode=False,
     )
 
 

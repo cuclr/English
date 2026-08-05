@@ -52,9 +52,15 @@
                                 <div class="compact-word-list">
                                     {% for item in day_words %}
                                         <div class="compact-word-row">
-                                            <div>
-                                                <strong>{{ item.word }}</strong>
-                                                {% if item.definition %}<span>{{ item.definition }}</span>{% endif %}
+                                            <div class="compact-word-main">
+                                                <form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=item.id) }}">
+                                                    <input type="hidden" name="next" value="date_library">
+                                                    <button class="favorite-button {% if item.is_favorite %}is-active{% endif %}" type="submit" aria-label="{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %} {{ item.word }}" title="{% if item.is_favorite %}移出生词簿{% else %}加入生词簿{% endif %}">{% if item.is_favorite %}★{% else %}☆{% endif %}</button>
+                                                </form>
+                                                <div>
+                                                    <strong>{{ item.word }}</strong>
+                                                    {% if item.definition %}<span>{{ item.definition }}</span>{% endif %}
+                                                </div>
                                             </div>
                                             <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
                                                 <input type="hidden" name="next" value="date_library">

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>自由组合背诵</title>
+    <title>专项背诵</title>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -26,12 +26,55 @@
 
         <header class="review-range-header">
             <p class="eyebrow">FLEXIBLE REVIEW</p>
-            <h1>自由组合背诵</h1>
-            <p>选择任意几个日期，或一次全选。不会和模糊的单词会继续留在队列，认识的单词本轮不再重复。</p>
+            <h1>专项背诵</h1>
+            <p>从生词簿开始，或按日期自由组合范围。不熟的单词会继续留在队列，认识后退出本轮。</p>
         </header>
 
+        <section class="review-module favorite-review-module">
+            <div class="review-module-heading">
+                <div>
+                    <p class="eyebrow">VOCABULARY BOOK</p>
+                    <h2>生词簿</h2>
+                    <p>集中抽背收藏的单词，不会和模糊的词可以再次出现。</p>
+                </div>
+                <span class="module-count">{{ favorite_count }} 个单词</span>
+            </div>
+            {% if favorite_count %}
+                <form method="post" action="{{ url_for('start_favorite_review') }}">
+                    <button class="module-action" type="submit">开始背诵生词簿</button>
+                </form>
+                <details class="favorite-word-panel">
+                    <summary>查看收藏的单词</summary>
+                    <div class="favorite-word-list">
+                        {% for item in favorite_words %}
+                            <div class="favorite-word-row">
+                                <form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=item.id) }}">
+                                    <input type="hidden" name="next" value="custom_review_setup">
+                                    <button class="favorite-button is-active" type="submit" aria-label="取消收藏 {{ item.word }}" title="移出生词簿">★</button>
+                                </form>
+                                <div>
+                                    <strong>{{ item.word }}</strong>
+                                    <span>{{ item.definition }}</span>
+                                </div>
+                                <small>{{ item.source_study_date }}</small>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </details>
+            {% else %}
+                <p class="module-empty">点击每日词库中单词前的星形标志，即可加入生词簿。</p>
+            {% endif %}
+        </section>
+
         {% if days %}
-            <form id="review-range-form" class="review-range-form" method="post" action="{{ url_for('start_custom_review') }}">
+            <form id="review-range-form" class="review-range-form review-module" method="post" action="{{ url_for('start_custom_review') }}">
+                <div class="review-module-heading range-module-heading">
+                    <div>
+                        <p class="eyebrow">DATE COMBINATION</p>
+                        <h2>日期组合</h2>
+                        <p>勾选任意日期，或全选所有日期和单词。</p>
+                    </div>
+                </div>
                 <div class="range-toolbar">
                     <label class="select-all-option" for="select-all-days">
                         <input id="select-all-days" type="checkbox">

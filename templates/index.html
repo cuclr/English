@@ -13,7 +13,7 @@
             <div class="hero-topline">
                 <p class="eyebrow">VOCABULARY NOTEBOOK</p>
                 <div class="hero-links">
-                    <a class="text-link" href="{{ url_for('custom_review_setup') }}">自由组合背诵</a>
+                    <a class="text-link" href="{{ url_for('custom_review_setup') }}">专项背诵</a>
                     <a class="text-link" href="{{ url_for('date_library') }}">切换日期</a>
                     <a class="text-link" href="{{ url_for('settings_page') }}">设置</a>
                 </div>
@@ -96,7 +96,13 @@
                             {% for item in active_words %}
                                 <section class="word-entry">
                                     <div class="word-heading">
-                                        <h4>{{ item.word }}</h4>
+                                        <div class="word-title-line">
+                                            <form class="favorite-form" method="post" action="{{ url_for('toggle_favorite', word_id=item.id) }}">
+                                                <input type="hidden" name="next" value="index">
+                                                <button class="favorite-button {% if item.is_favorite %}is-active{% endif %}" type="submit" aria-label="{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %} {{ item.word }}" title="{% if item.is_favorite %}移出生词簿{% else %}加入生词簿{% endif %}">{% if item.is_favorite %}★{% else %}☆{% endif %}</button>
+                                            </form>
+                                            <h4>{{ item.word }}</h4>
+                                        </div>
                                         <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
                                             <input type="hidden" name="next" value="index">
                                             <button class="delete-button" type="submit" aria-label="删除 {{ item.word }}">删除</button>

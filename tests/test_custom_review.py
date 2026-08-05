@@ -54,7 +54,9 @@ class CustomReviewTest(unittest.TestCase):
     def test_range_page_supports_individual_selection_and_select_all(self):
         html = self.client.get("/study/range").get_data(as_text=True)
 
-        self.assertIn("自由组合背诵", html)
+        self.assertIn("专项背诵", html)
+        self.assertIn("日期组合", html)
+        self.assertIn("生词簿", html)
         self.assertIn('id="select-all-days"', html)
         self.assertEqual(html.count('name="study_day_ids"'), 3)
         self.assertIn("已选择 ${selected.length} 个日期", html)
@@ -140,6 +142,48 @@ class CustomReviewTest(unittest.TestCase):
         self.assertIn(".review-range-page", css)
         self.assertIn(".range-day-list { grid-template-columns: 1fr; }", css)
         self.assertIn(".select-all-option input, .range-day-option input", css)
+
+    def test_favorite_words_have_their_own_mastery_review(self):
+        with vocabulary_app.get_db() as connection:
+            connection.execute(
+                "UPDATE words SET is_favorite = 1 WHERE id = ?",
+                (self.alpha_id,),
+            )
+
+        setup_html = self.client.get("/study/range").get_data(as_text=True)
+        self.assertIn("1 个单词", setup_html)
+        self.assertIn('action="/study/favorites"', setup_html)
+        self.assertIn("查看收藏的单词", setup_html)
+        self.assertIn("alpha", setup_html)
+        self.assertIn(f'/words/{self.alpha_id}/favorite', setup_html)
+
+        start_response = self.client.post("/study/favorites")
+        self.assertEqual(start_response.status_code, 302)
+        self.assertTrue(start_response.location.endswith("/study/favorites/session"))
+
+        study_html = self.client.get(start_response.location).get_data(as_text=True)
+        self.assertIn("生词簿背诵", study_html)
+        self.assertIn('action="/study/favorites/review"', study_html)
+
+        unknown_response = self.client.post(
+            "/study/favorites/review",
+            data={"word_id": self.alpha_id, "rating": "again"},
+        )
+        self.assertEqual(unknown_response.status_code, 302)
+        self.assertIn(
+            "<h2>alpha</h2>",
+            self.client.get(unknown_response.location).get_data(as_text=True),
+        )
+
+        known_response = self.client.post(
+            "/study/favorites/review",
+            data={"word_id": self.alpha_id, "rating": "known"},
+        )
+        completed_html = self.client.get(
+            known_response.location
+        ).get_data(as_text=True)
+        self.assertIn("生词簿中的单词已经全部掌握", completed_html)
+        self.assertIn("重新复习生词簿", completed_html)
 
 
 if __name__ == "__main__":

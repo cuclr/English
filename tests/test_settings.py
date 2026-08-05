@@ -81,6 +81,11 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("当前词书：second", main_html)
 
     def test_reset_progress_keeps_word_but_clears_review_state(self):
+        with vocabulary_app.get_db() as connection:
+            connection.execute(
+                "UPDATE words SET is_favorite = 1 WHERE id = ?", (self.word_id,)
+            )
+
         response = self.client.post("/review/reset", follow_redirects=True)
         self.assertEqual(response.status_code, 200)
 
@@ -88,7 +93,7 @@ class SettingsTest(unittest.TestCase):
             word = connection.execute(
                 """
                 SELECT level, correct_count, wrong_count, last_reviewed,
-                       next_review_date
+                       next_review_date, is_favorite
                 FROM words WHERE id = ?
                 """,
                 (self.word_id,),
@@ -102,6 +107,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(word["correct_count"], 0)
         self.assertEqual(word["wrong_count"], 0)
         self.assertIsNone(word["last_reviewed"])
+        self.assertEqual(word["is_favorite"], 1)
         self.assertEqual(record_count, 0)
 
 
