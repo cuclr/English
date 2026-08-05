@@ -599,7 +599,7 @@ def add_word():
     except sqlite3.IntegrityError:
         flash("所选学习日期不存在。", "error")
     else:
-        flash(f"已保存：{entry.word} · {entry.definition}", "success")
+        flash(f"{entry.word} 添加成功\n{entry.definition}", "success")
 
     return redirect(url_for("index"))
 

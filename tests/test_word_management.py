@@ -110,7 +110,7 @@ class WordManagementTest(unittest.TestCase):
 
         html = response.get_data(as_text=True)
         self.assertIn('class="message success"', html)
-        self.assertIn("已保存：example · n. 例子；实例", html)
+        self.assertIn("example 添加成功\nn. 例子；实例", html)
 
     def test_library_hides_phrases_but_study_mode_keeps_them(self):
         phrase = "example phrase 示例词组"

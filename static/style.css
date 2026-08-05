@@ -143,7 +143,7 @@ small { color: var(--muted); }
 .date-input-shell.has-value .date-input-placeholder { opacity: 0; }
 
 .messages { position: fixed; z-index: 20; top: 20px; right: 20px; width: min(390px, calc(100% - 32px)); }
-.message { margin: 8px 0; padding: 14px 18px; border: 1px solid transparent; border-radius: 12px; box-shadow: 0 12px 36px rgb(25 35 28 / 16%); animation: toast-in .3s ease-out both; }
+.message { margin: 8px 0; padding: 14px 18px; border: 1px solid transparent; border-radius: 12px; box-shadow: 0 12px 36px rgb(25 35 28 / 16%); white-space: pre-line; animation: toast-in .3s ease-out both; }
 .message.success { color: #174e34; background: #dcefe5; }
 .message.error { color: #7b2929; border-color: #e7bebe; background: #fff1f0; }
 .message-leaving { animation: toast-out .25s ease-in both; }
