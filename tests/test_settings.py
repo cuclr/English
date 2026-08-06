@@ -80,6 +80,22 @@ class SettingsTest(unittest.TestCase):
         main_html = self.client.get("/").get_data(as_text=True)
         self.assertIn("当前词书：second", main_html)
 
+    def test_theme_word_surfaces_and_contrast_palettes_are_defined(self):
+        html = self.client.get("/settings").get_data(as_text=True)
+        css = (
+            Path(__file__).resolve().parents[1] / "static" / "style.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("潮汐蓝橙", html)
+        self.assertIn("紫金花园", html)
+        self.assertIn("玫瑰青瓷", html)
+        self.assertEqual(css.count("--word-surface:"), 4)
+        self.assertIn("background: var(--word-surface)", css)
+        self.assertNotIn("background: #f1f4ee", css)
+        self.assertIn("#2864a8 50%, #dc7657 50%", css)
+        self.assertIn("#7055a4 50%, #c9a13d 50%", css)
+        self.assertIn("#a65370 50%, #4f9b92 50%", css)
+
     def test_reset_progress_keeps_word_but_clears_review_state(self):
         with vocabulary_app.get_db() as connection:
             connection.execute(
