@@ -182,6 +182,38 @@ class WordManagementTest(unittest.TestCase):
         self.assertIn("sessionStorage", html)
         self.assertIn("wordInput.focus()", html)
 
+    def test_main_page_has_animated_back_to_top_button(self):
+        html = self.client.get("/").get_data(as_text=True)
+        script = (
+            Path(__file__).resolve().parents[1] / "static" / "back_to_top.js"
+        ).read_text(encoding="utf-8")
+        css = (
+            Path(__file__).resolve().parents[1] / "static" / "style.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('id="back-to-top"', html)
+        self.assertIn("back_to_top.js", html)
+        self.assertIn("window.scrollTo({", script)
+        self.assertIn("behavior: reducedMotion.matches ? 'auto' : 'smooth'", script)
+        self.assertIn("window.scrollY > 320", script)
+        self.assertNotIn("window.location", script)
+        self.assertIn(".back-to-top.is-visible", css)
+
+    def test_main_word_star_is_visually_centered_with_word(self):
+        css = (
+            Path(__file__).resolve().parents[1] / "static" / "style.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            ".favorite-form { display: flex; flex: 0 0 auto; align-items: center",
+            css,
+        )
+        self.assertIn(
+            ".word-title-line .favorite-button svg, "
+            ".word-title-line .favorite-indicator svg { transform: translateY(1px); }",
+            css,
+        )
+
     def test_empty_date_input_uses_friendly_prompt(self):
         html = self.client.get("/").get_data(as_text=True)
 

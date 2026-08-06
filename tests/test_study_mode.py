@@ -254,7 +254,8 @@ class StudyModeTest(unittest.TestCase):
     def test_main_page_has_separate_spaced_and_repeat_review_actions(self):
         html = self.client.get("/").get_data(as_text=True)
 
-        self.assertIn("间隔复习", html)
+        self.assertIn("开始复习", html)
+        self.assertNotIn(">间隔复习</a>", html)
         self.assertIn("重新背诵当天", html)
         self.assertIn(f'/study/{self.day_id}/repeat', html)
 

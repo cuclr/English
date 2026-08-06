@@ -84,7 +84,7 @@
                         <span>{{ active_words|length }} 个单词</span>
                         {% if active_words %}
                             <div class="day-actions">
-                                <a class="study-link" href="{{ url_for('study', study_day_id=active_day.id) }}">间隔复习</a>
+                                <a class="study-link" href="{{ url_for('study', study_day_id=active_day.id) }}">开始复习</a>
                                 <form class="inline-repeat-form" method="post" action="{{ url_for('start_repeat_review', study_day_id=active_day.id) }}">
                                     <button class="repeat-link" type="submit">重新背诵当天</button>
                                 </form>
@@ -122,6 +122,13 @@
             {% endif %}
         </section>
     </main>
+
+    <button id="back-to-top" class="back-to-top" type="button" aria-label="回到页面顶部" aria-hidden="true" tabindex="-1" title="回到顶部">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 10.5 12 4.5l6 6M12 5v14"></path>
+        </svg>
+        <span>顶部</span>
+    </button>
 
     <script>
         const wordForm = document.querySelector('#word-entry-form');
@@ -168,5 +175,6 @@
         });
     </script>
     <script src="{{ url_for('static', filename='favorites.js') }}"></script>
+    <script src="{{ url_for('static', filename='back_to_top.js') }}"></script>
 </body>
 </html>
