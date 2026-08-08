@@ -52,6 +52,15 @@
 - `CHANGELOG.md` 按日期追加记录，使用 `Added`、`Changed`、`Fixed`、`Removed` 分类。
 - 没有内容的分类也应保留，并填写“无”。
 
+## Git 与 GitHub 提交规范
+
+- 所有新提交必须遵循 Conventional Commits，格式为 `type(scope): description`；不需要 scope 时使用 `type: description`。
+- 根据实际改动选择准确类型，常用类型包括 `feat`、`fix`、`style`、`docs`、`refactor`、`test`、`chore`、`build` 和 `ci`。
+- 提交说明应简洁描述实际变化，不使用 `fix 1`、`update`、`change` 等无法辨认用途的占位名称。
+- 提交或推送前先检查实际差异、测试结果和目标分支，避免把本地数据库、PDF、密钥或其他个人数据加入 Git。
+- 向 GitHub 推送后，向用户报告提交说明、提交哈希和同步结果。
+- 如果操作需要用户登录、授权、处理冲突、选择目标分支或确认强制推送，必须先明确说明用户需要完成的步骤；未经明确确认不得执行高风险 Git 操作。
+
 ## 最终回复格式
 
 每次任务完成后，回复末尾必须包含以下完整结构：

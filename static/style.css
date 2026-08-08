@@ -320,6 +320,14 @@ small { color: var(--muted); }
 .date-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; color: var(--muted); font-size: 14px; }
 .date-toolbar form { margin: 0; }
 .select-date-button { width: auto; min-height: 38px; margin: 0; padding: 7px 13px; }
+.date-management { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--accent-surface); }
+.edit-date-form { display: grid; grid-template-columns: auto minmax(150px, 220px) auto; align-items: center; gap: 9px; margin: 0; }
+.edit-date-form label { color: var(--muted); font-size: 13px; font-weight: 800; }
+.edit-date-form input { min-height: 38px; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; }
+.edit-date-button, .delete-day-button { width: auto; min-height: 38px; margin: 0; padding: 7px 13px; }
+.delete-day-form { margin: 0; }
+.delete-day-button { border: 1px solid #d8aaa5; background: transparent; color: #8f3f38; }
+.delete-day-button:hover { border-color: #b7655d; background: #f8e8e5; color: #71302b; }
 .compact-word-list { border-top: 1px solid var(--line); }
 .compact-word-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 2px; border-bottom: 1px solid var(--line); }
 .compact-word-row > div { min-width: 0; }
@@ -405,6 +413,8 @@ small { color: var(--muted); }
     .day-actions { align-items: flex-end; flex-direction: column; }
     .date-toolbar { align-items: stretch; flex-direction: column; }
     .select-date-button { width: 100%; }
+    .date-management, .edit-date-form { grid-template-columns: 1fr; align-items: stretch; }
+    .edit-date-button, .delete-day-button, .delete-day-form { width: 100%; }
     .compact-word-row { align-items: flex-start; }
     .compact-word-row strong, .compact-word-row span { display: block; }
     .compact-word-row span { margin-top: 4px; }

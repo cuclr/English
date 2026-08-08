@@ -47,6 +47,23 @@
                                 </form>
                             </div>
 
+                            <div class="date-management" aria-label="管理 {{ day.study_date }}">
+                                <form class="edit-date-form" method="post" action="{{ url_for('edit_study_day', study_day_id=day.id) }}">
+                                    <label for="edit-date-{{ day.id }}">修改日期</label>
+                                    <input id="edit-date-{{ day.id }}" name="study_date" type="date" value="{{ day.study_date }}" required>
+                                    <button class="edit-date-button" type="submit">保存</button>
+                                </form>
+                                <form
+                                    class="delete-day-form"
+                                    method="post"
+                                    action="{{ url_for('delete_study_day', study_day_id=day.id) }}"
+                                    data-study-date="{{ day.study_date }}"
+                                    data-word-count="{{ day.word_count }}"
+                                >
+                                    <button class="delete-day-button" type="submit">删除日期</button>
+                                </form>
+                            </div>
+
                             {% set day_words = words_by_day.get(day.id, []) %}
                             {% if day_words %}
                                 <div class="compact-word-list">
@@ -88,6 +105,23 @@
             form.addEventListener('submit', (event) => {
                 const confirmed = window.confirm(`确定删除“${form.dataset.word}”吗？相关学习记录也会一并删除。`);
                 if (!confirmed) event.preventDefault();
+            });
+        });
+
+        document.querySelectorAll('.delete-day-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const firstConfirmed = window.confirm(
+                    `确定删除学习日期“${form.dataset.studyDate}”吗？该日期下的 ${form.dataset.wordCount} 个单词也会一并删除。`
+                );
+                if (!firstConfirmed) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const secondConfirmed = window.confirm(
+                    `请再次确认：删除“${form.dataset.studyDate}”后，相关单词和学习记录将无法在应用中恢复。仍要继续吗？`
+                );
+                if (!secondConfirmed) event.preventDefault();
             });
         });
     </script>

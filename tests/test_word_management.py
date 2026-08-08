@@ -48,6 +48,87 @@ class WordManagementTest(unittest.TestCase):
             html,
         )
 
+    def test_study_date_can_be_edited(self):
+        response = self.client.post(
+            f"/days/{self.first_day_id}/edit",
+            data={"study_date": "2099-09-03"},
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("学习日期已修改为 2099-09-03", response.get_data(as_text=True))
+        with vocabulary_app.get_db() as connection:
+            study_date = connection.execute(
+                "SELECT study_date FROM study_days WHERE id = ?",
+                (self.first_day_id,),
+            ).fetchone()["study_date"]
+        self.assertEqual(study_date, "2099-09-03")
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["selected_day_id"], self.first_day_id)
+
+    def test_study_date_cannot_be_edited_to_an_existing_date(self):
+        response = self.client.post(
+            f"/days/{self.first_day_id}/edit",
+            data={"study_date": "2099-09-02"},
+            follow_redirects=True,
+        )
+
+        self.assertIn("这个学习日期已经存在", response.get_data(as_text=True))
+        with vocabulary_app.get_db() as connection:
+            study_date = connection.execute(
+                "SELECT study_date FROM study_days WHERE id = ?",
+                (self.first_day_id,),
+            ).fetchone()["study_date"]
+        self.assertEqual(study_date, "2099-09-01")
+
+    def test_delete_study_date_cascades_and_selects_a_remaining_date(self):
+        with vocabulary_app.get_db() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO words (study_day_id, word, definition)
+                VALUES (?, 'dated-word', '日期删除测试')
+                """,
+                (self.first_day_id,),
+            )
+            word_id = cursor.lastrowid
+            connection.execute(
+                "INSERT INTO learning_records (word_id, result) VALUES (?, 'unknown')",
+                (word_id,),
+            )
+        self.client.post(
+            "/preferences/study-day",
+            data={"study_day_id": self.first_day_id},
+        )
+
+        response = self.client.post(
+            f"/days/{self.first_day_id}/delete",
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("已删除学习日期 2099-09-01", response.get_data(as_text=True))
+        with vocabulary_app.get_db() as connection:
+            day_count = connection.execute(
+                "SELECT COUNT(*) FROM study_days WHERE id = ?", (self.first_day_id,)
+            ).fetchone()[0]
+            word_count = connection.execute(
+                "SELECT COUNT(*) FROM words WHERE id = ?", (word_id,)
+            ).fetchone()[0]
+            record_count = connection.execute(
+                "SELECT COUNT(*) FROM learning_records WHERE word_id = ?", (word_id,)
+            ).fetchone()[0]
+        self.assertEqual((day_count, word_count, record_count), (0, 0, 0))
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["selected_day_id"], self.second_day_id)
+
+    def test_date_library_has_two_step_delete_confirmation(self):
+        html = self.client.get("/dates").get_data(as_text=True)
+
+        self.assertIn('class="edit-date-form"', html)
+        self.assertIn('class="delete-day-form"', html)
+        self.assertIn("const firstConfirmed = window.confirm", html)
+        self.assertIn("const secondConfirmed = window.confirm", html)
+
     def test_delete_word_also_deletes_its_learning_records(self):
         with vocabulary_app.get_db() as connection:
             connection.execute(

@@ -599,6 +599,68 @@ def create_day():
     return redirect(url_for("index"))
 
 
+@app.post("/days/<int:study_day_id>/edit")
+def edit_study_day(study_day_id: int):
+    """Update a study date without changing the words assigned to it."""
+    study_date = request.form.get("study_date", "").strip()
+    if not study_date:
+        flash("请选择新的学习日期。", "error")
+        return redirect(url_for("date_library"))
+
+    try:
+        date.fromisoformat(study_date)
+    except ValueError:
+        flash("日期格式不正确，请重新选择。", "error")
+        return redirect(url_for("date_library"))
+
+    try:
+        with get_db() as connection:
+            study_day = connection.execute(
+                "SELECT id FROM study_days WHERE id = ?", (study_day_id,)
+            ).fetchone()
+            if study_day is None:
+                flash("要编辑的学习日期不存在。", "error")
+                return redirect(url_for("date_library"))
+
+            connection.execute(
+                "UPDATE study_days SET study_date = ? WHERE id = ?",
+                (study_date, study_day_id),
+            )
+            session["selected_day_id"] = study_day_id
+    except sqlite3.IntegrityError:
+        flash("这个学习日期已经存在。", "error")
+    else:
+        flash(f"学习日期已修改为 {study_date}。", "success")
+
+    return redirect(url_for("date_library"))
+
+
+@app.post("/days/<int:study_day_id>/delete")
+def delete_study_day(study_day_id: int):
+    """Delete a study date; SQLite cascades to its words and review records."""
+    with get_db() as connection:
+        study_day = connection.execute(
+            "SELECT study_date FROM study_days WHERE id = ?", (study_day_id,)
+        ).fetchone()
+        if study_day is None:
+            flash("要删除的学习日期不存在。", "error")
+            return redirect(url_for("date_library"))
+
+        deleted_date = study_day["study_date"]
+        connection.execute("DELETE FROM study_days WHERE id = ?", (study_day_id,))
+
+        if session.get("selected_day_id") == study_day_id:
+            replacement_day = connection.execute(
+                "SELECT id FROM study_days ORDER BY study_date DESC LIMIT 1"
+            ).fetchone()
+            session["selected_day_id"] = (
+                replacement_day["id"] if replacement_day else None
+            )
+
+    flash(f"已删除学习日期 {deleted_date}，该日期下的单词也已删除。", "success")
+    return redirect(url_for("date_library"))
+
+
 @app.post("/words")
 def add_word():
     study_day_id = request.form.get("study_day_id", type=int)
