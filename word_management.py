@@ -45,7 +45,9 @@ def search_words(
         FROM words
         JOIN study_days ON study_days.id = words.study_day_id
         WHERE words.word LIKE ? ESCAPE '\\' COLLATE NOCASE
-        ORDER BY study_days.study_date DESC, words.word COLLATE NOCASE, words.id DESC
+        ORDER BY words.word COLLATE NOCASE ASC,
+                 study_days.study_date DESC,
+                 words.id DESC
         LIMIT ?
         """,
         (pattern, limit),
@@ -64,7 +66,7 @@ def find_duplicate_groups(connection: sqlite3.Connection) -> list[sqlite3.Row]:
         JOIN study_days ON study_days.id = words.study_day_id
         GROUP BY LOWER(words.word)
         HAVING COUNT(*) > 1
-        ORDER BY duplicate_count DESC, word COLLATE NOCASE
+        ORDER BY word COLLATE NOCASE ASC, duplicate_count DESC
         """
     ).fetchall()
 

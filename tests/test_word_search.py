@@ -64,6 +64,25 @@ class WordSearchAndEditTest(unittest.TestCase):
         self.assertIn('class="word-edit-form"', html)
         self.assertIn("hidden", html)
 
+    def test_word_manager_orders_results_alphabetically(self):
+        with vocabulary_app.get_db() as connection:
+            for word in ("Banana", "application", "apple"):
+                connection.execute(
+                    """
+                    INSERT INTO words (study_day_id, word, definition, meaning)
+                    VALUES (?, ?, '排序测试', '排序测试')
+                    """,
+                    (self.first_day_id, word),
+                )
+
+        html = self.client.get("/words/manage").get_data(as_text=True)
+        positions = [
+            html.index(f"<strong>{word}</strong>")
+            for word in ("apple", "application", "atmosphere", "Banana", "catalog")
+        ]
+
+        self.assertEqual(positions, sorted(positions))
+
     def test_edit_updates_word_meaning_phrases_and_date(self):
         response = self.client.post(
             f"/words/{self.atmosphere_id}/edit",
