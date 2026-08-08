@@ -151,6 +151,13 @@ class WordManagementTest(unittest.TestCase):
         self.assertIn("filter: brightness(.86)", css)
         self.assertNotIn("background: #f3f6f1", css)
 
+    def test_date_library_has_animated_back_to_top_button(self):
+        html = self.client.get("/dates").get_data(as_text=True)
+
+        self.assertIn('id="back-to-top"', html)
+        self.assertIn('aria-label="回到页面顶部"', html)
+        self.assertIn("back_to_top.js", html)
+
     def test_delete_word_also_deletes_its_learning_records(self):
         with vocabulary_app.get_db() as connection:
             connection.execute(

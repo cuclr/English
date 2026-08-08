@@ -114,6 +114,13 @@
         {% endif %}
     </main>
 
+    <button id="back-to-top" class="back-to-top" type="button" aria-label="回到页面顶部" aria-hidden="true" tabindex="-1" title="回到顶部">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 10.5 12 4.5l6 6M12 5v14"></path>
+        </svg>
+        <span>顶部</span>
+    </button>
+
     <script>
         document.querySelectorAll('[data-date-edit-toggle]').forEach((button) => {
             const panel = document.getElementById(button.getAttribute('aria-controls'));
@@ -153,5 +160,6 @@
         });
     </script>
     <script src="{{ url_for('static', filename='favorites.js') }}"></script>
+    <script src="{{ url_for('static', filename='back_to_top.js') }}"></script>
 </body>
 </html>
