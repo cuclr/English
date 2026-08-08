@@ -92,6 +92,43 @@
             {% endif %}
         </section>
 
+        <section class="settings-section">
+            <div class="settings-title">
+                <div>
+                    <h2>数据备份与恢复</h2>
+                    <p>备份保存在本机 <code>instance/backups</code>，不会上传到 GitHub。</p>
+                </div>
+                <span class="settings-count">{{ backups|length }} 份</span>
+            </div>
+
+            <form class="create-backup-form" method="post" action="{{ url_for('create_database_backup') }}">
+                <button class="select-date-button" type="submit">立即创建备份</button>
+            </form>
+
+            {% if backups %}
+                <div class="backup-list">
+                    {% for backup in backups %}
+                        <article class="backup-row">
+                            <div class="backup-details">
+                                <strong>{{ backup.created_at }}</strong>
+                                <span>{{ backup.kind_label }} · {{ backup.size_label }}</span>
+                            </div>
+                            <form
+                                class="restore-backup-form"
+                                method="post"
+                                action="{{ url_for('restore_database_backup', backup_name=backup.name) }}"
+                                data-backup-name="{{ backup.name }}"
+                            >
+                                <button class="restore-backup-button" type="submit">恢复此备份</button>
+                            </form>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="backup-empty">还没有备份。建议在大量录入、修改或删除数据前创建一份。</p>
+            {% endif %}
+        </section>
+
         <section class="settings-section danger-section">
             <div class="settings-title">
                 <div>
@@ -111,6 +148,22 @@
         resetForm?.addEventListener('submit', (event) => {
             const confirmed = window.confirm('确定重置全部复习进度吗？该操作无法撤销。');
             if (!confirmed) event.preventDefault();
+        });
+
+        document.querySelectorAll('.restore-backup-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const firstConfirmed = window.confirm(
+                    '恢复后，当前日期、单词和学习进度会被所选备份替换。确定继续吗？'
+                );
+                if (!firstConfirmed) {
+                    event.preventDefault();
+                    return;
+                }
+                const secondConfirmed = window.confirm(
+                    `请再次确认恢复“${form.dataset.backupName}”。系统会先自动备份当前数据。`
+                );
+                if (!secondConfirmed) event.preventDefault();
+            });
         });
     </script>
 </body>

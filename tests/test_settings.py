@@ -67,6 +67,8 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("主题颜色", html)
         self.assertEqual(html.count("data-theme-option="), 4)
         self.assertIn("theme.js", html)
+        self.assertIn("数据备份与恢复", html)
+        self.assertIn("立即创建备份", html)
 
         response = self.client.post(
             "/settings/book",
@@ -79,6 +81,40 @@ class SettingsTest(unittest.TestCase):
         )
         main_html = self.client.get("/").get_data(as_text=True)
         self.assertIn("当前词书：second", main_html)
+
+    def test_settings_can_create_and_restore_database_backup(self):
+        create_response = self.client.post(
+            "/settings/backups", follow_redirects=True
+        )
+        self.assertIn("备份已创建", create_response.get_data(as_text=True))
+        backup_files = list((vocabulary_app.DATABASE.parent / "backups").glob("manual-*.db"))
+        self.assertEqual(len(backup_files), 1)
+
+        with vocabulary_app.get_db() as connection:
+            connection.execute("UPDATE words SET definition = '已修改'")
+
+        restore_response = self.client.post(
+            f"/settings/backups/{backup_files[0].name}/restore",
+            follow_redirects=True,
+        )
+        self.assertIn("数据库已恢复", restore_response.get_data(as_text=True))
+        with vocabulary_app.get_db() as connection:
+            definition = connection.execute(
+                "SELECT definition FROM words WHERE id = ?", (self.word_id,)
+            ).fetchone()["definition"]
+        self.assertEqual(definition, "例子")
+        safety_files = list(
+            (vocabulary_app.DATABASE.parent / "backups").glob("before-restore-*.db")
+        )
+        self.assertEqual(len(safety_files), 1)
+
+    def test_restore_controls_require_two_confirmations(self):
+        self.client.post("/settings/backups")
+        html = self.client.get("/settings").get_data(as_text=True)
+
+        self.assertIn('class="restore-backup-form"', html)
+        self.assertIn("const firstConfirmed = window.confirm", html)
+        self.assertIn("const secondConfirmed = window.confirm", html)
 
     def test_theme_word_surfaces_and_contrast_palettes_are_defined(self):
         html = self.client.get("/settings").get_data(as_text=True)

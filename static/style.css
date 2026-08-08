@@ -381,6 +381,15 @@ small { color: var(--muted); }
 .book-details strong { overflow-wrap: anywhere; }
 .book-details span { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .active-book-badge { flex: 0 0 auto; color: var(--green); font-size: 13px; font-weight: 800; }
+.create-backup-form { margin: 0 0 16px; }
+.backup-list { display: grid; gap: 10px; }
+.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 11px; background: var(--accent-surface); }
+.backup-details { min-width: 0; }
+.backup-details strong, .backup-details span { display: block; }
+.backup-details span, .backup-empty { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.restore-backup-form { flex: 0 0 auto; margin: 0; }
+.restore-backup-button { width: auto; min-height: 38px; margin: 0; padding: 7px 13px; border: 1px solid var(--accent-border); background: transparent; color: var(--green); }
+.restore-backup-button:hover { border-color: var(--green); background: var(--accent-soft); color: var(--green-dark); }
 .danger-section { border-color: #e4c5c1; }
 .danger-note { color: #7b4a44; line-height: 1.65; }
 .danger-button { width: auto; padding: 0 18px; background: #a7473f; }
@@ -426,6 +435,8 @@ small { color: var(--muted); }
     .compact-word-row span { margin-top: 4px; }
     .book-row { align-items: stretch; flex-direction: column; }
     .book-row form, .book-row button, .danger-button { width: 100%; }
+    .backup-row { align-items: stretch; flex-direction: column; }
+    .restore-backup-form, .restore-backup-button { width: 100%; }
     .range-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; }
     .review-range-form { padding: 16px; }
     .favorite-review-module { padding: 16px; }

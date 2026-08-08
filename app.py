@@ -5,6 +5,7 @@ import sqlite3
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
+from backup_manager import BackupError, DatabaseBackupManager
 from book_manager import BookManager, BookManagerError
 from pdf_search import PdfSearchError, PdfSearcher
 from spaced_repetition import (
@@ -497,6 +498,7 @@ def health_check():
 def settings_page():
     books = book_manager.list_books()
     active_book = book_manager.active_book()
+    backups = DatabaseBackupManager(DATABASE).list_backups()
     with get_db() as connection:
         word_count = connection.execute("SELECT COUNT(*) FROM words").fetchone()[0]
         review_count = connection.execute(
@@ -506,9 +508,45 @@ def settings_page():
         "settings.html",
         books=books,
         active_book=active_book,
+        backups=backups,
         word_count=word_count,
         review_count=review_count,
     )
+
+
+@app.post("/settings/backups")
+def create_database_backup():
+    try:
+        backup = DatabaseBackupManager(DATABASE).create_backup()
+    except BackupError as exc:
+        flash(str(exc), "error")
+    else:
+        flash(f"备份已创建：{backup.name}", "success")
+    return redirect(url_for("settings_page"))
+
+
+@app.post("/settings/backups/<backup_name>/restore")
+def restore_database_backup(backup_name: str):
+    try:
+        safety_backup = DatabaseBackupManager(DATABASE).restore_backup(backup_name)
+        init_db()
+    except BackupError as exc:
+        flash(str(exc), "error")
+    except sqlite3.Error as exc:
+        flash(f"数据库已经恢复，但结构升级失败：{exc}", "error")
+    else:
+        for key in (
+            "selected_day_id",
+            "repeat_review",
+            "custom_review",
+            "favorite_review",
+        ):
+            session.pop(key, None)
+        flash(
+            f"数据库已恢复。操作前的数据已保存为：{safety_backup.name}",
+            "success",
+        )
+    return redirect(url_for("settings_page"))
 
 
 @app.post("/settings/book")
