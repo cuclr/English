@@ -102,6 +102,8 @@
                                             {% set favorite_next = 'index' %}
                                             {% include '_favorite_button.html' %}
                                             <h4>{{ item.word }}</h4>
+                                            {% set pronunciation_word = item.word %}
+                                            {% include '_pronunciation_button.html' %}
                                         </div>
                                         <form class="delete-form" method="post" action="{{ url_for('delete_word', word_id=item.id) }}" data-word="{{ item.word }}">
                                             <input type="hidden" name="next" value="index">
@@ -176,6 +178,7 @@
         });
     </script>
     <script src="{{ url_for('static', filename='favorites.js') }}"></script>
+    <script src="{{ url_for('static', filename='pronunciation.js') }}"></script>
     <script src="{{ url_for('static', filename='back_to_top.js') }}"></script>
 </body>
 </html>

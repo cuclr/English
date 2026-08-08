@@ -65,6 +65,17 @@
                     {% set favorite_static = favorite_mode %}
                     {% include '_favorite_button.html' %}
                     <h2>{{ word.word }}</h2>
+                    {% set pronunciation_word = word.word %}
+                    {% include '_pronunciation_button.html' %}
+                </div>
+                <div class="pronunciation-toolbar" data-pronunciation-settings data-auto-pronounce-word="{{ word.word }}">
+                    <span>发音</span>
+                    <div class="pronunciation-accent-options" role="group" aria-label="选择英语口音">
+                        <button type="button" data-pronunciation-accent="en-US" aria-pressed="false">美式</button>
+                        <button type="button" data-pronunciation-accent="en-GB" aria-pressed="false">英式</button>
+                    </div>
+                    <button class="pronunciation-auto-button" type="button" data-pronunciation-auto aria-pressed="false">自动播放：关</button>
+                    <small class="pronunciation-status" data-pronunciation-status aria-live="polite"></small>
                 </div>
                 <p class="review-meta">
                     答对 {{ word.correct_count }} 次 · 答错 {{ word.wrong_count }} 次
@@ -132,6 +143,7 @@
 
     {% if word %}
     <script src="{{ url_for('static', filename='favorites.js') }}"></script>
+    <script src="{{ url_for('static', filename='pronunciation.js') }}"></script>
     <script>
         const revealButton = document.querySelector('#reveal-button');
         const answer = document.querySelector('#answer');

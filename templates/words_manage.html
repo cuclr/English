@@ -71,6 +71,8 @@
                                 <div class="managed-word-copy">
                                     <div class="managed-word-title">
                                         <strong>{{ item.word }}</strong>
+                                        {% set pronunciation_word = item.word %}
+                                        {% include '_pronunciation_button.html' %}
                                         <span class="managed-date-badge">{{ item.study_date }}</span>
                                         {% if item.duplicate_count > 1 %}<span class="duplicate-badge">重复 {{ item.duplicate_count }} 条</span>{% endif %}
                                     </div>
@@ -145,6 +147,7 @@
             });
         });
     </script>
+    <script src="{{ url_for('static', filename='pronunciation.js') }}"></script>
     <script src="{{ url_for('static', filename='back_to_top.js') }}"></script>
 </body>
 </html>

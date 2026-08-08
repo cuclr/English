@@ -215,6 +215,10 @@ small { color: var(--muted); }
 .favorite-button path, .favorite-indicator path { fill: transparent; stroke: var(--favorite-yellow); stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; transition: fill .16s ease, opacity .16s ease; }
 .favorite-button:hover path { filter: brightness(.86); }
 .favorite-button.is-active path, .favorite-indicator.is-active path { fill: var(--favorite-yellow); stroke: var(--favorite-yellow); }
+.pronunciation-button { display: inline-grid; flex: 0 0 auto; width: 30px; min-height: 30px; margin: 0; padding: 3px; place-items: center; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--green); }
+.pronunciation-button:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--green-dark); }
+.pronunciation-button.is-speaking { border-color: var(--green); background: var(--accent-soft); animation: pronunciation-pulse .9s ease-in-out infinite alternate; }
+.pronunciation-button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .delete-form { flex: 0 0 auto; }
 .delete-button { width: auto; min-height: 32px; margin: 0; padding: 4px 9px; border: 1px solid #e5c7c3; background: transparent; color: #985047; font-size: 12px; }
 .delete-button:hover { background: #f8e4e1; color: #742e28; }
@@ -248,6 +252,18 @@ small { color: var(--muted); }
 .recall-label { margin: 0; color: var(--muted); }
 .recall-word-line { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 7px 0 10px; }
 .recall-card h2 { margin: 0; color: var(--green-dark); font-family: Georgia, serif; font-size: clamp(38px, 7vw, 56px); line-height: 1.05; }
+.recall-word-line .pronunciation-button { width: 36px; min-height: 36px; }
+.recall-word-line .pronunciation-button svg { width: 25px; height: 25px; }
+.pronunciation-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; margin: 0 auto 10px; color: var(--muted); font-size: 12px; }
+.pronunciation-toolbar > span { font-weight: 800; }
+.pronunciation-accent-options { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--accent-surface); }
+.pronunciation-accent-options button, .pronunciation-auto-button { width: auto; min-height: 30px; margin: 0; padding: 4px 9px; background: transparent; color: var(--muted); font-size: 12px; }
+.pronunciation-accent-options button.is-active, .pronunciation-auto-button.is-active { background: var(--green); color: white; }
+.pronunciation-accent-options button:hover, .pronunciation-auto-button:hover { background: var(--accent-soft); color: var(--green-dark); }
+.pronunciation-accent-options button.is-active:hover, .pronunciation-auto-button.is-active:hover { background: var(--green-dark); color: white; }
+.pronunciation-auto-button { border: 1px solid var(--accent-border); }
+.pronunciation-status { flex-basis: 100%; min-height: 0; color: var(--muted); text-align: center; }
+.pronunciation-status:empty { display: none; }
 .review-meta { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
 .reveal-button { max-width: 240px; min-height: 40px; margin-top: 0; }
 .answer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); text-align: left; }
@@ -440,6 +456,10 @@ small { color: var(--muted); }
 
 @keyframes toast-out {
     to { opacity: 0; transform: translateX(24px); }
+}
+
+@keyframes pronunciation-pulse {
+    to { transform: scale(1.08); }
 }
 
 @media (max-width: 480px) {
