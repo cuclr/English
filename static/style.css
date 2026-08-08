@@ -126,8 +126,9 @@ label { color: var(--muted); font-size: 14px; font-weight: 700; }
 input, select, button { width: 100%; min-height: 44px; border-radius: 9px; font: inherit; }
 input, select { padding: 0 12px; border: 1px solid var(--line); background: white; color: var(--ink); }
 input:focus, select:focus { outline: 3px solid rgb(var(--accent-rgb) / 16%); border-color: var(--green); }
-button { margin-top: 6px; border: 0; background: var(--green); color: white; font-weight: 800; cursor: pointer; }
+button { margin-top: 6px; border: 0; background: var(--green); color: white; font-weight: 800; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease, transform .16s ease; }
 button:hover { background: var(--green-dark); }
+button:not(:disabled):hover { filter: brightness(.94); }
 button:disabled { opacity: .45; cursor: not-allowed; }
 small { color: var(--muted); }
 
@@ -211,7 +212,7 @@ small { color: var(--muted); }
 .favorite-button svg, .favorite-indicator svg { width: 27px; height: 27px; overflow: visible; }
 .word-title-line .favorite-button svg, .word-title-line .favorite-indicator svg { transform: translateY(1px); }
 .favorite-button path, .favorite-indicator path { fill: transparent; stroke: var(--favorite-yellow); stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; transition: fill .16s ease, opacity .16s ease; }
-.favorite-button:hover path { opacity: .78; }
+.favorite-button:hover path { filter: brightness(.86); }
 .favorite-button.is-active path, .favorite-indicator.is-active path { fill: var(--favorite-yellow); stroke: var(--favorite-yellow); }
 .delete-form { flex: 0 0 auto; }
 .delete-button { width: auto; min-height: 32px; margin: 0; padding: 4px 9px; border: 1px solid #e5c7c3; background: transparent; color: #985047; font-size: 12px; }
@@ -311,16 +312,20 @@ small { color: var(--muted); }
 .dates-header > p:last-child { color: var(--muted); }
 .date-accordion-list { display: grid; gap: 12px; }
 .date-accordion { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: 0 7px 24px rgb(36 48 39 / 5%); }
-.date-accordion summary { position: relative; padding: 19px 52px 19px 22px; color: var(--ink); font-size: 19px; font-weight: 800; cursor: pointer; list-style: none; }
-.date-accordion summary::-webkit-details-marker { display: none; }
-.date-accordion summary::after { position: absolute; top: 50%; right: 22px; color: var(--green); font-size: 22px; content: "+"; transform: translateY(-50%); }
-.date-accordion[open] summary { border-bottom: 1px solid var(--line); background: #f3f6f1; }
-.date-accordion[open] summary::after { content: "−"; }
+.date-accordion > summary { position: relative; padding: 19px 52px 19px 22px; color: var(--ink); font-size: 19px; font-weight: 800; cursor: pointer; list-style: none; }
+.date-accordion > summary::-webkit-details-marker { display: none; }
+.date-accordion > summary::after { position: absolute; top: 50%; right: 22px; color: var(--green); font-size: 22px; content: "+"; transform: translateY(-50%); }
+.date-accordion[open] > summary { border-bottom: 1px solid var(--line); background: var(--accent-soft); }
+.date-accordion[open] > summary::after { content: "−"; }
 .date-accordion-content { padding: 18px 22px 22px; }
 .date-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; color: var(--muted); font-size: 14px; }
-.date-toolbar form { margin: 0; }
-.select-date-button { width: auto; min-height: 38px; margin: 0; padding: 7px 13px; }
+.date-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.date-toolbar-actions form { margin: 0; }
+.select-date-button, .edit-date-toggle { width: auto; min-height: 38px; margin: 0; padding: 7px 13px; }
+.edit-date-toggle { border: 1px solid var(--accent-border); background: transparent; color: var(--green); }
+.edit-date-toggle:hover, .edit-date-toggle[aria-expanded="true"] { border-color: var(--green); background: var(--accent-soft); color: var(--green-dark); }
 .date-management { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--accent-surface); }
+.date-management[hidden] { display: none; }
 .edit-date-form { display: grid; grid-template-columns: auto minmax(150px, 220px) auto; align-items: center; gap: 9px; margin: 0; }
 .edit-date-form label { color: var(--muted); font-size: 13px; font-weight: 800; }
 .edit-date-form input { min-height: 38px; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; }
@@ -412,7 +417,8 @@ small { color: var(--muted); }
     .day-title { align-items: flex-start; }
     .day-actions { align-items: flex-end; flex-direction: column; }
     .date-toolbar { align-items: stretch; flex-direction: column; }
-    .select-date-button { width: 100%; }
+    .date-toolbar-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
+    .date-toolbar-actions form, .select-date-button { width: 100%; }
     .date-management, .edit-date-form { grid-template-columns: 1fr; align-items: stretch; }
     .edit-date-button, .delete-day-button, .delete-day-form { width: 100%; }
     .compact-word-row { align-items: flex-start; }

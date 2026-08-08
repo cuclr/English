@@ -124,10 +124,32 @@ class WordManagementTest(unittest.TestCase):
     def test_date_library_has_two_step_delete_confirmation(self):
         html = self.client.get("/dates").get_data(as_text=True)
 
+        self.assertIn("data-date-edit-toggle", html)
+        self.assertIn('aria-expanded="false"', html)
+        self.assertIn('class="date-management"', html)
+        self.assertIn("hidden", html)
         self.assertIn('class="edit-date-form"', html)
         self.assertIn('class="delete-day-form"', html)
+        self.assertIn("panel.hidden = !willOpen", html)
         self.assertIn("const firstConfirmed = window.confirm", html)
         self.assertIn("const secondConfirmed = window.confirm", html)
+
+    def test_date_controls_follow_theme_and_have_hover_feedback(self):
+        css = (
+            Path(__file__).resolve().parents[1] / "static" / "style.css"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("button:hover { background: var(--green-dark); }", css)
+        self.assertIn("button:not(:disabled):hover { filter: brightness(.94); }", css)
+        self.assertEqual(css.count("--green-dark:"), 4)
+        self.assertIn(
+            ".date-accordion[open] > summary { border-bottom: 1px solid var(--line); background: var(--accent-soft); }",
+            css,
+        )
+        self.assertIn("background: var(--accent-surface)", css)
+        self.assertIn(".edit-date-toggle:hover", css)
+        self.assertIn("filter: brightness(.86)", css)
+        self.assertNotIn("background: #f3f6f1", css)
 
     def test_delete_word_also_deletes_its_learning_records(self):
         with vocabulary_app.get_db() as connection:

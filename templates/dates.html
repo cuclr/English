@@ -38,16 +38,30 @@
                         <div class="date-accordion-content">
                             <div class="date-toolbar">
                                 <span>{{ day.word_count }} 个单词</span>
-                                <form method="post" action="{{ url_for('select_study_day') }}">
-                                    <input type="hidden" name="study_day_id" value="{{ day.id }}">
-                                    <input type="hidden" name="redirect_to" value="index">
-                                    <button class="select-date-button" type="submit">
-                                        {% if active_day and day.id == active_day.id %}返回当前日期{% else %}选择此日期并返回{% endif %}
-                                    </button>
-                                </form>
+                                <div class="date-toolbar-actions">
+                                    <form method="post" action="{{ url_for('select_study_day') }}">
+                                        <input type="hidden" name="study_day_id" value="{{ day.id }}">
+                                        <input type="hidden" name="redirect_to" value="index">
+                                        <button class="select-date-button" type="submit">
+                                            {% if active_day and day.id == active_day.id %}返回当前日期{% else %}选择此日期并返回{% endif %}
+                                        </button>
+                                    </form>
+                                    <button
+                                        class="edit-date-toggle"
+                                        type="button"
+                                        aria-expanded="false"
+                                        aria-controls="date-management-{{ day.id }}"
+                                        data-date-edit-toggle
+                                    >编辑日期</button>
+                                </div>
                             </div>
 
-                            <div class="date-management" aria-label="管理 {{ day.study_date }}">
+                            <div
+                                id="date-management-{{ day.id }}"
+                                class="date-management"
+                                aria-label="管理 {{ day.study_date }}"
+                                hidden
+                            >
                                 <form class="edit-date-form" method="post" action="{{ url_for('edit_study_day', study_day_id=day.id) }}">
                                     <label for="edit-date-{{ day.id }}">修改日期</label>
                                     <input id="edit-date-{{ day.id }}" name="study_date" type="date" value="{{ day.study_date }}" required>
@@ -101,6 +115,19 @@
     </main>
 
     <script>
+        document.querySelectorAll('[data-date-edit-toggle]').forEach((button) => {
+            const panel = document.getElementById(button.getAttribute('aria-controls'));
+            if (!panel) return;
+
+            button.addEventListener('click', () => {
+                const willOpen = panel.hidden;
+                panel.hidden = !willOpen;
+                button.setAttribute('aria-expanded', String(willOpen));
+                button.textContent = willOpen ? '收起编辑' : '编辑日期';
+                if (willOpen) panel.querySelector('input')?.focus();
+            });
+        });
+
         document.querySelectorAll('.delete-form').forEach((form) => {
             form.addEventListener('submit', (event) => {
                 const confirmed = window.confirm(`确定删除“${form.dataset.word}”吗？相关学习记录也会一并删除。`);
