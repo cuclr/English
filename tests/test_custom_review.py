@@ -55,11 +55,11 @@ class CustomReviewTest(unittest.TestCase):
         html = self.client.get("/study/range").get_data(as_text=True)
 
         self.assertIn("专项背诵", html)
-        self.assertIn("日期组合", html)
+        self.assertIn("组合筛选", html)
         self.assertIn("生词簿", html)
         self.assertIn('id="select-all-days"', html)
         self.assertEqual(html.count('name="study_day_ids"'), 3)
-        self.assertIn("已选择 ${selected.length} 个日期", html)
+        self.assertIn("`${selected.length} 个日期`", html)
         self.assertIn("开始背诵 ${wordCount} 个单词", html)
         self.assertIn("disabled", html)
 
@@ -76,7 +76,7 @@ class CustomReviewTest(unittest.TestCase):
         self.assertEqual(state["study_day_ids"], self.day_ids[:2])
 
         html = self.client.get(response.location).get_data(as_text=True)
-        self.assertIn("组合背诵", html)
+        self.assertIn("组合筛选背诵", html)
         self.assertIn("3 个单词", html)
         self.assertIn('action="/study/range/review"', html)
         self.assertIn("来自 2099-12-0", html)
@@ -127,7 +127,90 @@ class CustomReviewTest(unittest.TestCase):
     def test_empty_range_is_rejected(self):
         response = self.client.post("/study/range", data={}, follow_redirects=True)
 
-        self.assertIn("请至少选择一个包含单词的日期", response.get_data(as_text=True))
+        self.assertIn("请至少选择一个日期、标签或生词簿筛选条件", response.get_data(as_text=True))
+
+    def test_tags_dates_and_favorites_are_intersected_for_custom_review(self):
+        with vocabulary_app.get_db() as connection:
+            focus_tag = connection.execute(
+                "INSERT INTO tags (name) VALUES ('自定义重点')"
+            ).lastrowid
+            connection.execute(
+                "INSERT INTO word_tags (word_id, tag_id) VALUES (?, ?)",
+                (self.alpha_id, focus_tag),
+            )
+            connection.execute(
+                "UPDATE words SET is_favorite = 1 WHERE id = ?", (self.alpha_id,)
+            )
+
+        response = self.client.post(
+            "/study/range",
+            data={
+                "study_day_ids": [self.day_ids[0]],
+                "tag_ids": [focus_tag],
+                "favorite_only": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        with self.client.session_transaction() as client_session:
+            state = client_session["custom_review"]
+        self.assertEqual(state["study_day_ids"], [self.day_ids[0]])
+        self.assertEqual(state["tag_ids"], [focus_tag])
+        self.assertTrue(state["favorite_only"])
+        html = self.client.get(response.location).get_data(as_text=True)
+        self.assertIn("自定义重点", html)
+        self.assertIn("仅生词簿", html)
+        self.assertIn("1 个单词", html)
+
+    def test_tag_filter_can_start_review_without_selecting_a_date(self):
+        with vocabulary_app.get_db() as connection:
+            tag_id = connection.execute(
+                "INSERT INTO tags (name) VALUES ('跨日期标签')"
+            ).lastrowid
+            gamma_id = connection.execute(
+                "SELECT id FROM words WHERE word = 'gamma'"
+            ).fetchone()["id"]
+            connection.executemany(
+                "INSERT INTO word_tags (word_id, tag_id) VALUES (?, ?)",
+                [(self.alpha_id, tag_id), (gamma_id, tag_id)],
+            )
+
+        response = self.client.post("/study/range", data={"tag_ids": [tag_id]})
+
+        self.assertEqual(response.status_code, 302)
+        html = self.client.get(response.location).get_data(as_text=True)
+        self.assertIn("跨日期标签", html)
+        self.assertIn("2 个单词", html)
+
+    def test_multiple_tag_filters_require_every_selected_tag(self):
+        with vocabulary_app.get_db() as connection:
+            writing_tag = connection.execute(
+                "INSERT INTO tags (name) VALUES ('写作')"
+            ).lastrowid
+            exam_tag = connection.execute(
+                "INSERT INTO tags (name) VALUES ('考前')"
+            ).lastrowid
+            gamma_id = connection.execute(
+                "SELECT id FROM words WHERE word = 'gamma'"
+            ).fetchone()["id"]
+            connection.executemany(
+                "INSERT INTO word_tags (word_id, tag_id) VALUES (?, ?)",
+                [
+                    (self.alpha_id, writing_tag),
+                    (self.alpha_id, exam_tag),
+                    (gamma_id, writing_tag),
+                ],
+            )
+
+        response = self.client.post(
+            "/study/range",
+            data={"tag_ids": [writing_tag, exam_tag]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        html = self.client.get(response.location).get_data(as_text=True)
+        self.assertIn("标签：写作 + 考前", html)
+        self.assertIn("1 个单词", html)
 
     def test_study_feedback_auto_dismisses(self):
         html = self.client.get(f"/study/{self.day_ids[0]}").get_data(as_text=True)

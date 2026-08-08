@@ -308,6 +308,17 @@ small { color: var(--muted); }
 .favorite-word-row strong { color: var(--green-dark); font-family: Georgia, serif; font-size: 18px; }
 .favorite-word-row span { margin-top: 2px; color: var(--muted); font-size: 13px; }
 .favorite-word-row small { font-size: 12px; }
+.review-filter-groups { display: grid; gap: 10px; margin-bottom: 14px; }
+.review-tag-filter, .word-tag-fieldset { min-width: 0; margin: 0; padding: 13px; border: 1px solid var(--line); border-radius: 11px; }
+.review-tag-filter legend, .word-tag-fieldset legend { padding: 0 6px; color: var(--green-dark); font-size: 13px; font-weight: 800; }
+.review-tag-filter > p { margin: 0; color: var(--muted); font-size: 13px; }
+.review-tag-filter a { color: var(--green); font-weight: 800; }
+.review-tag-options, .word-tag-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-tag-options label, .word-tag-options label, .favorite-only-option { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); cursor: pointer; }
+.review-tag-options label:has(input:checked), .word-tag-options label:has(input:checked), .favorite-only-option:has(input:checked) { border-color: var(--green); background: var(--accent-soft); color: var(--green-dark); }
+.review-tag-options input, .word-tag-options input, .favorite-only-option input { width: 16px; min-height: 16px; margin: 0; accent-color: var(--green); }
+.review-tag-options small { color: var(--muted); }
+.favorite-only-option { width: fit-content; color: var(--green-dark); font-weight: 800; }
 .range-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .range-toolbar > span { color: var(--muted); font-size: 14px; }
 .select-all-option, .range-day-option { cursor: pointer; }
@@ -416,9 +427,30 @@ small { color: var(--muted); }
 .word-manager-header { margin-bottom: 24px; }
 .word-manager-header h1 { margin: 7px 0; font-family: Georgia, serif; font-size: clamp(38px, 7vw, 58px); }
 .word-manager-header > p:last-child { color: var(--muted); }
+.tag-manager-panel { margin-bottom: 18px; border: 1px solid var(--accent-border); border-radius: 15px; background: var(--accent-surface); }
+.tag-manager-panel > summary { display: flex; justify-content: space-between; padding: 16px 18px; color: var(--green-dark); font-weight: 800; cursor: pointer; }
+.tag-manager-panel > summary span { color: var(--muted); font-size: 13px; }
+.tag-manager-content { padding: 0 16px 16px; }
+.tag-create-form { margin-bottom: 13px; }
+.tag-create-form > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 7px; }
+.tag-create-form button, .tag-management-row button { width: auto; min-height: 38px; margin: 0; padding: 6px 12px; }
+.tag-management-list { display: grid; gap: 8px; }
+.tag-management-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 10px; border-radius: 10px; background: var(--card); }
+.tag-management-row > form:first-child { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; margin: 0; }
+.tag-management-row > span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.delete-tag-form { margin: 0; }
+.delete-tag-form button { border: 1px solid #e5c7c3; background: transparent; color: #985047; }
+.delete-tag-form button:hover { background: #f8e4e1; color: #742e28; }
+.tag-empty { margin: 0; color: var(--muted); font-size: 13px; }
 .word-search-form { margin-bottom: 18px; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: 0 8px 30px rgb(36 48 39 / 6%); }
-.word-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; margin-top: 8px; }
-.word-search-row button { width: auto; margin: 0; padding: 0 20px; }
+.word-search-row { margin-top: 8px; }
+.word-filter-row { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px; margin-top: 10px; }
+.word-filter-row > label:not(.favorite-filter-option) { display: grid; gap: 6px; }
+.favorite-filter-option { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.favorite-filter-option:has(input:checked) { border-color: var(--green); background: var(--accent-soft); color: var(--green-dark); }
+.favorite-filter-option input { width: 17px; min-height: 17px; margin: 0; accent-color: var(--green); }
+.word-filter-actions { display: flex; align-items: center; gap: 14px; margin-top: 11px; }
+.word-filter-actions button { width: auto; margin: 0; padding: 0 20px; }
 .clear-search-link { color: var(--green); font-size: 14px; font-weight: 800; text-decoration: none; }
 .clear-search-link:hover { color: var(--green-dark); text-decoration: underline; }
 .duplicate-summary { margin-bottom: 18px; border: 1px solid var(--accent-border); border-radius: 14px; background: var(--accent-surface); }
@@ -439,6 +471,8 @@ small { color: var(--muted); }
 .managed-date-badge, .duplicate-badge { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .managed-date-badge { background: var(--accent-soft); color: var(--green-dark); }
 .duplicate-badge { background: #fff0d8; color: #8a5a13; }
+.word-tag-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.word-tag-list span { padding: 3px 8px; border-radius: 999px; background: var(--accent-surface); color: var(--green-dark); font-size: 11px; font-weight: 800; }
 .managed-word-copy p { margin: 7px 0 0; color: var(--muted); line-height: 1.55; white-space: pre-line; }
 .managed-word-copy small { display: block; margin-top: 5px; }
 .word-edit-toggle { flex: 0 0 auto; width: auto; min-height: 36px; margin: 0; padding: 6px 12px; border: 1px solid var(--accent-border); background: transparent; color: var(--green); }
@@ -496,7 +530,11 @@ small { color: var(--muted); }
     .backup-row { align-items: stretch; flex-direction: column; }
     .restore-backup-form, .restore-backup-button { width: 100%; }
     .word-search-row { grid-template-columns: 1fr auto; }
-    .word-search-row input { grid-column: 1 / -1; }
+    .word-filter-row { grid-template-columns: 1fr; }
+    .favorite-filter-option { width: 100%; }
+    .tag-create-form > div, .tag-management-row, .tag-management-row > form:first-child { grid-template-columns: 1fr; }
+    .tag-management-row > span { white-space: normal; }
+    .tag-management-row button, .delete-tag-form { width: 100%; }
     .word-edit-grid { grid-template-columns: 1fr; }
     .word-management-summary { gap: 10px; }
     .duplicate-list a { align-items: flex-start; flex-direction: column; gap: 4px; }

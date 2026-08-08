@@ -2,6 +2,8 @@
 
 import sqlite3
 
+from tag_manager import build_word_filter
+
 
 def parse_phrases(text: str) -> list[str]:
     """Convert one-phrase-per-line input into a clean, stable list."""
@@ -20,22 +22,31 @@ def search_words(
     connection: sqlite3.Connection,
     query: str,
     limit: int = 200,
+    study_day_ids: tuple[int, ...] = (),
+    tag_ids: tuple[int, ...] = (),
+    favorite_only: bool = False,
 ) -> tuple[list[sqlite3.Row], int]:
     """Search every study date and include a global duplicate count."""
     escaped_query = (
         query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     )
     pattern = f"%{escaped_query}%"
+    filter_sql, filter_parameters = build_word_filter(
+        study_day_ids,
+        tag_ids,
+        favorite_only,
+    )
     total = connection.execute(
-        """
+        f"""
         SELECT COUNT(*)
-        FROM words
+        FROM words AS words
         WHERE word LIKE ? ESCAPE '\\' COLLATE NOCASE
+          AND {filter_sql}
         """,
-        (pattern,),
+        (pattern, *filter_parameters),
     ).fetchone()[0]
     rows = connection.execute(
-        """
+        f"""
         SELECT words.*, study_days.study_date,
                (
                    SELECT COUNT(*)
@@ -45,12 +56,13 @@ def search_words(
         FROM words
         JOIN study_days ON study_days.id = words.study_day_id
         WHERE words.word LIKE ? ESCAPE '\\' COLLATE NOCASE
+          AND {filter_sql}
         ORDER BY words.word COLLATE NOCASE ASC,
                  study_days.study_date DESC,
                  words.id DESC
         LIMIT ?
         """,
-        (pattern, limit),
+        (pattern, *filter_parameters, limit),
     ).fetchall()
     return rows, total
 

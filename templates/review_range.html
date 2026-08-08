@@ -27,7 +27,7 @@
         <header class="review-range-header">
             <p class="eyebrow">FLEXIBLE REVIEW</p>
             <h1>专项背诵</h1>
-            <p>从生词簿开始，或按日期自由组合范围。不熟的单词会继续留在队列，认识后退出本轮。</p>
+            <p>从生词簿开始，或组合日期、标签和收藏状态。不熟的单词会继续留在队列，认识后退出本轮。</p>
         </header>
 
         <section class="review-module favorite-review-module">
@@ -70,9 +70,31 @@
                 <div class="review-module-heading range-module-heading">
                     <div>
                         <p class="eyebrow">DATE COMBINATION</p>
-                        <h2>日期组合</h2>
-                        <p>勾选任意日期，或全选所有日期和单词。</p>
+                        <h2>组合筛选</h2>
+                        <p>日期、标签和生词簿条件会取交集；选择多个标签时，单词需同时拥有这些标签。</p>
                     </div>
+                </div>
+                <div class="review-filter-groups">
+                    <fieldset class="review-tag-filter">
+                        <legend>标签</legend>
+                        {% if tags %}
+                            <div class="review-tag-options">
+                                {% for tag in tags %}
+                                    <label>
+                                        <input class="range-tag-checkbox" type="checkbox" name="tag_ids" value="{{ tag.id }}">
+                                        <span>{{ tag.name }}</span>
+                                        <small>{{ tag.word_count }}</small>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p>还没有自定义标签，可前往<a href="{{ url_for('word_manager') }}">单词管理</a>创建。</p>
+                        {% endif %}
+                    </fieldset>
+                    <label class="favorite-only-option">
+                        <input id="favorite-only-filter" type="checkbox" name="favorite_only" value="1">
+                        <span>仅筛选生词簿中的单词</span>
+                    </label>
                 </div>
                 <div class="range-toolbar">
                     <label class="select-all-option" for="select-all-days">
@@ -99,8 +121,8 @@
                     {% endfor %}
                 </section>
 
-                <p id="range-selection-error" class="range-selection-error" role="alert" hidden>请至少选择一个包含单词的日期。</p>
-                <button id="start-range-review" class="start-range-review" type="submit" disabled>选择日期后开始背诵</button>
+                <p id="range-selection-error" class="range-selection-error" role="alert" hidden>请至少选择一个日期、标签或生词簿条件。</p>
+                <button id="start-range-review" class="start-range-review" type="submit" disabled>选择条件后开始背诵</button>
             </form>
         {% else %}
             <div class="empty-state">
@@ -114,6 +136,8 @@
         const rangeForm = document.querySelector('#review-range-form');
         const selectAll = document.querySelector('#select-all-days');
         const dayCheckboxes = Array.from(document.querySelectorAll('.range-day-checkbox:not(:disabled)'));
+        const tagCheckboxes = Array.from(document.querySelectorAll('.range-tag-checkbox'));
+        const favoriteOnly = document.querySelector('#favorite-only-filter');
         const selectionSummary = document.querySelector('#selection-summary');
         const selectionError = document.querySelector('#range-selection-error');
         const startButton = document.querySelector('#start-range-review');
@@ -124,20 +148,24 @@
                 (total, checkbox) => total + Number(checkbox.dataset.wordCount),
                 0,
             );
+            const selectedTags = tagCheckboxes.filter((checkbox) => checkbox.checked);
+            const hasFilters = selected.length > 0 || selectedTags.length > 0 || favoriteOnly?.checked;
             if (selectAll) {
                 selectAll.checked = selected.length > 0 && selected.length === dayCheckboxes.length;
                 selectAll.indeterminate = selected.length > 0 && selected.length < dayCheckboxes.length;
             }
             if (selectionSummary) {
-                selectionSummary.textContent = selected.length
-                    ? `已选择 ${selected.length} 个日期，共 ${wordCount} 个单词`
-                    : '尚未选择日期';
+                const parts = [];
+                if (selected.length) parts.push(`${selected.length} 个日期`);
+                if (selectedTags.length) parts.push(`${selectedTags.length} 个标签`);
+                if (favoriteOnly?.checked) parts.push('仅生词簿');
+                selectionSummary.textContent = parts.length ? `已选择：${parts.join(' + ')}` : '尚未选择条件';
             }
             if (startButton) {
-                startButton.disabled = selected.length === 0;
-                startButton.textContent = selected.length
-                    ? `开始背诵 ${wordCount} 个单词`
-                    : '选择日期后开始背诵';
+                startButton.disabled = !hasFilters;
+                startButton.textContent = hasFilters
+                    ? (selectedTags.length || favoriteOnly?.checked ? '按组合条件开始背诵' : `开始背诵 ${wordCount} 个单词`)
+                    : '选择条件后开始背诵';
             }
             if (selectionError) selectionError.hidden = true;
         };
@@ -147,8 +175,13 @@
             updateSelection();
         });
         dayCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSelection));
+        tagCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSelection));
+        favoriteOnly?.addEventListener('change', updateSelection);
         rangeForm?.addEventListener('submit', (event) => {
-            if (!dayCheckboxes.some((checkbox) => checkbox.checked)) {
+            const hasFilters = dayCheckboxes.some((checkbox) => checkbox.checked)
+                || tagCheckboxes.some((checkbox) => checkbox.checked)
+                || favoriteOnly?.checked;
+            if (!hasFilters) {
                 event.preventDefault();
                 selectionError.hidden = false;
             }

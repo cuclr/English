@@ -30,12 +30,65 @@
             <p>搜索全部日期中的单词，修正释义、词组或所属日期。</p>
         </header>
 
+        <details class="tag-manager-panel">
+            <summary>管理自定义标签 <span>{{ tags|length }} 个</span></summary>
+            <div class="tag-manager-content">
+                <form class="tag-create-form" method="post" action="{{ url_for('create_tag') }}">
+                    <label for="new-tag-name">新标签名称</label>
+                    <div>
+                        <input id="new-tag-name" name="name" maxlength="40" placeholder="例如：写作词汇" required>
+                        <button type="submit">添加标签</button>
+                    </div>
+                </form>
+                {% if tags %}
+                    <div class="tag-management-list">
+                        {% for tag in tags %}
+                            <div class="tag-management-row">
+                                <form method="post" action="{{ url_for('edit_tag', tag_id=tag.id) }}">
+                                    <input name="name" value="{{ tag.name }}" maxlength="40" aria-label="修改标签 {{ tag.name }}" required>
+                                    <button type="submit">保存名称</button>
+                                </form>
+                                <span>{{ tag.word_count }} 个单词</span>
+                                <form class="delete-tag-form" method="post" action="{{ url_for('delete_tag', tag_id=tag.id) }}" data-tag-name="{{ tag.name }}" data-word-count="{{ tag.word_count }}">
+                                    <button type="submit">删除</button>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="tag-empty">还没有标签。所有标签均由你自行创建。</p>
+                {% endif %}
+            </div>
+        </details>
+
         <form class="word-search-form" method="get" action="{{ url_for('word_manager') }}">
             <label for="word-search">搜索单词</label>
             <div class="word-search-row">
                 <input id="word-search" name="q" type="search" value="{{ query }}" placeholder="输入完整单词或部分拼写" autocomplete="off">
-                <button type="submit">搜索</button>
-                {% if query %}<a class="clear-search-link" href="{{ url_for('word_manager') }}">清除</a>{% endif %}
+            </div>
+            <div class="word-filter-row">
+                <label>
+                    <span>日期</span>
+                    <select name="study_day_id">
+                        <option value="">全部日期</option>
+                        {% for day in days %}<option value="{{ day.id }}" {% if day.id == selected_day_id %}selected{% endif %}>{{ day.study_date }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>标签</span>
+                    <select name="tag_id">
+                        <option value="">全部标签</option>
+                        {% for tag in tags %}<option value="{{ tag.id }}" {% if tag.id == selected_tag_id %}selected{% endif %}>{{ tag.name }}（{{ tag.word_count }}）</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="favorite-filter-option">
+                    <input type="checkbox" name="favorite" value="1" {% if favorite_only %}checked{% endif %}>
+                    <span>仅生词簿</span>
+                </label>
+            </div>
+            <div class="word-filter-actions">
+                <button type="submit">搜索并筛选</button>
+                {% if query or selected_day_id or selected_tag_id or favorite_only %}<a class="clear-search-link" href="{{ url_for('word_manager') }}">清除筛选</a>{% endif %}
             </div>
         </form>
 
@@ -76,6 +129,11 @@
                                         <span class="managed-date-badge">{{ item.study_date }}</span>
                                         {% if item.duplicate_count > 1 %}<span class="duplicate-badge">重复 {{ item.duplicate_count }} 条</span>{% endif %}
                                     </div>
+                                    {% if item.tags %}
+                                        <div class="word-tag-list" aria-label="单词标签">
+                                            {% for tag in item.tags %}<span>{{ tag.name }}</span>{% endfor %}
+                                        </div>
+                                    {% endif %}
                                     <p>{{ item.definition or '暂无释义' }}</p>
                                     {% if item.phrases %}<small>{{ item.phrases|length }} 个词组</small>{% endif %}
                                 </div>
@@ -96,6 +154,9 @@
                                 hidden
                             >
                                 <input type="hidden" name="q" value="{{ query }}">
+                                <input type="hidden" name="filter_study_day_id" value="{{ selected_day_id or '' }}">
+                                <input type="hidden" name="filter_tag_id" value="{{ selected_tag_id or '' }}">
+                                <input type="hidden" name="filter_favorite" value="{{ '1' if favorite_only else '' }}">
                                 <div class="word-edit-grid">
                                     <div>
                                         <label for="edit-word-{{ item.id }}">单词</label>
@@ -114,6 +175,21 @@
                                 <textarea id="edit-meaning-{{ item.id }}" name="meaning" rows="3" required>{{ item.definition }}</textarea>
                                 <label for="edit-phrases-{{ item.id }}">词组（每行一个）</label>
                                 <textarea id="edit-phrases-{{ item.id }}" name="phrases" rows="4" placeholder="每行填写一个词组">{{ item.phrases|join('\n') }}</textarea>
+                                <fieldset class="word-tag-fieldset">
+                                    <legend>标签</legend>
+                                    {% if tags %}
+                                        <div class="word-tag-options">
+                                            {% for tag in tags %}
+                                                <label>
+                                                    <input type="checkbox" name="tag_ids" value="{{ tag.id }}" {% if tag.id in item.tag_ids %}checked{% endif %}>
+                                                    <span>{{ tag.name }}</span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <small>请先在页面顶部创建标签。</small>
+                                    {% endif %}
+                                </fieldset>
                                 <button class="save-word-button" type="submit">保存修改</button>
                             </form>
                         </article>
@@ -144,6 +220,15 @@
                 button.setAttribute('aria-expanded', String(willOpen));
                 button.textContent = willOpen ? '收起' : '编辑';
                 if (willOpen) form.querySelector('input[name="word"]')?.focus();
+            });
+        });
+
+        document.querySelectorAll('.delete-tag-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const confirmed = window.confirm(
+                    `确定删除标签“${form.dataset.tagName}”吗？标签会从 ${form.dataset.wordCount} 个单词中移除，但单词不会删除。`
+                );
+                if (!confirmed) event.preventDefault();
             });
         });
     </script>

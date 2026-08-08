@@ -13,6 +13,13 @@ from spaced_repetition import (
     choose_weighted_word,
     level_label,
 )
+from tag_manager import (
+    build_word_filter,
+    list_tags,
+    replace_word_tags,
+    tags_by_word,
+    validate_tag_name,
+)
 from remote_access import RemoteAccessManager
 from word_management import (
     find_duplicate_groups,
@@ -149,6 +156,23 @@ def init_db() -> None:
                 FOREIGN KEY (word_id) REFERENCES words (id)
                     ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS word_tags (
+                word_id INTEGER NOT NULL,
+                tag_id INTEGER NOT NULL,
+                PRIMARY KEY (word_id, tag_id),
+                FOREIGN KEY (word_id) REFERENCES words (id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_word_tags_tag_id
+                ON word_tags (tag_id);
             """
         )
         # Keep databases created by the first MVP compatible with this version.
@@ -275,18 +299,23 @@ def get_custom_review_candidates(
     connection: sqlite3.Connection,
     study_day_ids: list[int],
     after_record_id: int,
+    tag_ids: list[int] | None = None,
+    favorite_only: bool = False,
 ) -> list[dict]:
     """Keep unknown words active until they are marked known in this round."""
     normalized_ids = sorted({int(day_id) for day_id in study_day_ids if day_id})
-    if not normalized_ids:
-        return []
-    placeholders = ", ".join("?" for _ in normalized_ids)
+    normalized_tag_ids = sorted({int(tag_id) for tag_id in (tag_ids or []) if tag_id})
+    filter_sql, filter_parameters = build_word_filter(
+        normalized_ids,
+        normalized_tag_ids,
+        favorite_only,
+    )
     rows = connection.execute(
         f"""
         SELECT words.*, study_days.study_date AS source_study_date
         FROM words
         JOIN study_days ON study_days.id = words.study_day_id
-        WHERE words.study_day_id IN ({placeholders})
+        WHERE {filter_sql}
           AND NOT EXISTS (
               SELECT 1
               FROM learning_records
@@ -296,7 +325,7 @@ def get_custom_review_candidates(
           )
         ORDER BY words.id ASC
         """,
-        (*normalized_ids, after_record_id),
+        (*filter_parameters, after_record_id),
     ).fetchall()
     return [deserialize_word(row) for row in rows]
 
@@ -345,25 +374,27 @@ def get_repeat_review_state(study_day_id: int) -> dict | None:
 
 
 def get_custom_review_state() -> dict | None:
-    """Return the selected dates and baseline for a custom review round."""
+    """Return the combined dates, tags, favorite filter, and round baseline."""
     state = session.get("custom_review")
     if not isinstance(state, dict):
         return None
     try:
         study_day_ids = sorted(
-            {
-                int(day_id)
-                for day_id in state["study_day_ids"]
-                if int(day_id) > 0
-            }
+            {int(day_id) for day_id in state.get("study_day_ids", []) if int(day_id) > 0}
         )
+        tag_ids = sorted(
+            {int(tag_id) for tag_id in state.get("tag_ids", []) if int(tag_id) > 0}
+        )
+        favorite_only = bool(state.get("favorite_only", False))
         after_record_id = int(state["after_record_id"])
     except (KeyError, TypeError, ValueError):
         return None
-    if not study_day_ids or after_record_id < 0:
+    if not (study_day_ids or tag_ids or favorite_only) or after_record_id < 0:
         return None
     return {
         "study_day_ids": study_day_ids,
+        "tag_ids": tag_ids,
+        "favorite_only": favorite_only,
         "after_record_id": after_record_id,
     }
 
@@ -626,14 +657,31 @@ def date_library():
 @app.get("/words/manage")
 def word_manager():
     query = request.args.get("q", "").strip()
+    selected_day_id = request.args.get("study_day_id", type=int)
+    selected_tag_id = request.args.get("tag_id", type=int)
+    favorite_only = request.args.get("favorite") == "1"
+    day_filter = (selected_day_id,) if selected_day_id else ()
+    tag_filter = (selected_tag_id,) if selected_tag_id else ()
     with get_db() as connection:
         days = connection.execute(
             "SELECT id, study_date FROM study_days ORDER BY study_date DESC"
         ).fetchall()
-        rows, total_results = search_words(connection, query, WORD_SEARCH_LIMIT)
+        tags = list_tags(connection)
+        rows, total_results = search_words(
+            connection,
+            query,
+            WORD_SEARCH_LIMIT,
+            day_filter,
+            tag_filter,
+            favorite_only,
+        )
         duplicate_groups = find_duplicate_groups(connection)
+        word_tags = tags_by_word(connection, [row["id"] for row in rows])
 
     words = [deserialize_word(row) for row in rows]
+    for item in words:
+        item["tags"] = word_tags.get(item["id"], [])
+        item["tag_ids"] = {tag["id"] for tag in item["tags"]}
     return render_template(
         "words_manage.html",
         query=query,
@@ -641,18 +689,36 @@ def word_manager():
         total_results=total_results,
         result_limit=WORD_SEARCH_LIMIT,
         days=days,
+        tags=tags,
+        selected_day_id=selected_day_id,
+        selected_tag_id=selected_tag_id,
+        favorite_only=favorite_only,
         duplicate_groups=duplicate_groups,
     )
 
 
+def word_manager_redirect_from_form():
+    """Preserve active search filters after editing one word."""
+    arguments = {"q": request.form.get("q", "").strip()}
+    study_day_id = request.form.get("filter_study_day_id", type=int)
+    tag_id = request.form.get("filter_tag_id", type=int)
+    if study_day_id:
+        arguments["study_day_id"] = study_day_id
+    if tag_id:
+        arguments["tag_id"] = tag_id
+    if request.form.get("filter_favorite") == "1":
+        arguments["favorite"] = "1"
+    return url_for("word_manager", **arguments)
+
+
 @app.post("/words/<int:word_id>/edit")
 def edit_word(word_id: int):
-    return_query = request.form.get("q", "").strip()
-    redirect_url = url_for("word_manager", q=return_query)
+    redirect_url = word_manager_redirect_from_form()
     word = request.form.get("word", "").strip()
     meaning = request.form.get("meaning", "").strip()
     phrases = parse_phrases(request.form.get("phrases", ""))
     study_day_id = request.form.get("study_day_id", type=int)
+    tag_ids = request.form.getlist("tag_ids", type=int)
 
     if not word or not meaning or not study_day_id:
         flash("请填写单词、释义并选择学习日期。", "error")
@@ -681,6 +747,12 @@ def edit_word(word_id: int):
             )
             return redirect(redirect_url)
 
+        try:
+            replace_word_tags(connection, word_id, tag_ids)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(redirect_url)
+
         connection.execute(
             """
             UPDATE words
@@ -699,6 +771,69 @@ def edit_word(word_id: int):
 
     flash(f"“{word}”已更新。", "success")
     return redirect(redirect_url)
+
+
+@app.post("/tags")
+def create_tag():
+    try:
+        name = validate_tag_name(request.form.get("name", ""))
+        with get_db() as connection:
+            connection.execute("INSERT INTO tags (name) VALUES (?)", (name,))
+    except ValueError as exc:
+        flash(str(exc), "error")
+    except sqlite3.IntegrityError:
+        flash("这个标签已经存在。", "error")
+    else:
+        flash(f"标签“{name}”已创建。", "success")
+    return redirect(url_for("word_manager"))
+
+
+@app.post("/tags/<int:tag_id>/edit")
+def edit_tag(tag_id: int):
+    try:
+        name = validate_tag_name(request.form.get("name", ""))
+        with get_db() as connection:
+            tag = connection.execute(
+                "SELECT name FROM tags WHERE id = ?", (tag_id,)
+            ).fetchone()
+            if tag is None:
+                flash("要修改的标签不存在。", "error")
+                return redirect(url_for("word_manager"))
+            connection.execute(
+                "UPDATE tags SET name = ? WHERE id = ?", (name, tag_id)
+            )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    except sqlite3.IntegrityError:
+        flash("这个标签名称已经存在。", "error")
+    else:
+        flash(f"标签已修改为“{name}”。", "success")
+    return redirect(url_for("word_manager"))
+
+
+@app.post("/tags/<int:tag_id>/delete")
+def delete_tag(tag_id: int):
+    with get_db() as connection:
+        tag = connection.execute(
+            """
+            SELECT tags.name, COUNT(word_tags.word_id) AS word_count
+            FROM tags
+            LEFT JOIN word_tags ON word_tags.tag_id = tags.id
+            WHERE tags.id = ?
+            GROUP BY tags.id
+            """,
+            (tag_id,),
+        ).fetchone()
+        if tag is None:
+            flash("要删除的标签不存在。", "error")
+            return redirect(url_for("word_manager"))
+        connection.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+
+    flash(
+        f"标签“{tag['name']}”已删除，{tag['word_count']} 个单词仍然保留。",
+        "success",
+    )
+    return redirect(url_for("word_manager"))
 
 
 @app.post("/days")
@@ -972,6 +1107,7 @@ def custom_review_setup():
             ORDER BY study_days.study_date DESC, words.id ASC
             """
         ).fetchall()
+        tags = list_tags(connection)
     total_word_count = sum(int(day["word_count"]) for day in days)
     return render_template(
         "review_range.html",
@@ -979,48 +1115,68 @@ def custom_review_setup():
         total_word_count=total_word_count,
         favorite_count=favorite_count,
         favorite_words=favorite_words,
+        tags=tags,
     )
 
 
 @app.post("/study/range")
 def start_custom_review():
-    """Start a weighted review round across any user-selected dates."""
-    requested_ids = sorted(
-        set(request.form.getlist("study_day_ids", type=int))
-    )
-    if not requested_ids:
-        flash("请至少选择一个包含单词的日期。", "error")
+    """Start a weighted round using intersected date, tag, and favorite filters."""
+    requested_ids = sorted(set(request.form.getlist("study_day_ids", type=int)))
+    requested_tag_ids = sorted(set(request.form.getlist("tag_ids", type=int)))
+    favorite_only = request.form.get("favorite_only") == "1"
+    if not (requested_ids or requested_tag_ids or favorite_only):
+        flash("请至少选择一个日期、标签或生词簿筛选条件。", "error")
         return redirect(url_for("custom_review_setup"))
 
-    placeholders = ", ".join("?" for _ in requested_ids)
     with get_db() as connection:
-        selected_days = connection.execute(
-            f"""
-            SELECT study_days.id, COUNT(words.id) AS word_count
-            FROM study_days
-            LEFT JOIN words ON words.study_day_id = study_days.id
-            WHERE study_days.id IN ({placeholders})
-            GROUP BY study_days.id
-            HAVING COUNT(words.id) > 0
-            """,
-            requested_ids,
-        ).fetchall()
+        selected_days = []
+        if requested_ids:
+            placeholders = ", ".join("?" for _ in requested_ids)
+            selected_days = connection.execute(
+                f"SELECT id, study_date FROM study_days WHERE id IN ({placeholders})",
+                requested_ids,
+            ).fetchall()
+        selected_tags = []
+        if requested_tag_ids:
+            placeholders = ", ".join("?" for _ in requested_tag_ids)
+            selected_tags = connection.execute(
+                f"SELECT id, name FROM tags WHERE id IN ({placeholders})",
+                requested_tag_ids,
+            ).fetchall()
+
+        selected_ids = sorted(int(day["id"]) for day in selected_days)
+        selected_tag_ids = sorted(int(tag["id"]) for tag in selected_tags)
+        if len(selected_ids) != len(requested_ids) or len(selected_tag_ids) != len(
+            requested_tag_ids
+        ):
+            flash("所选日期或标签已经不存在，请刷新后重试。", "error")
+            return redirect(url_for("custom_review_setup"))
+
+        filter_sql, filter_parameters = build_word_filter(
+            selected_ids,
+            selected_tag_ids,
+            favorite_only,
+        )
+        selected_word_count = connection.execute(
+            f"SELECT COUNT(*) FROM words WHERE {filter_sql}", filter_parameters
+        ).fetchone()[0]
         latest_record_id = connection.execute(
             "SELECT COALESCE(MAX(id), 0) FROM learning_records"
         ).fetchone()[0]
 
-    selected_ids = sorted(int(day["id"]) for day in selected_days)
-    selected_word_count = sum(int(day["word_count"]) for day in selected_days)
-    if not selected_ids:
-        flash("所选日期中没有可以背诵的单词。", "error")
+    if not selected_word_count:
+        flash("当前组合条件下没有可以背诵的单词。", "error")
         return redirect(url_for("custom_review_setup"))
 
     session["custom_review"] = {
         "study_day_ids": selected_ids,
+        "tag_ids": selected_tag_ids,
+        "favorite_only": favorite_only,
         "after_record_id": latest_record_id,
     }
     flash(
-        f"已开始组合背诵：{len(selected_ids)} 个日期，共 {selected_word_count} 个单词。",
+        f"已开始组合筛选背诵，本轮共 {selected_word_count} 个单词。",
         "success",
     )
     return redirect(url_for("custom_review_session"))
@@ -1028,7 +1184,7 @@ def start_custom_review():
 
 @app.get("/study/range/session")
 def custom_review_session():
-    """Draw from the selected dates until every word is marked known."""
+    """Draw from the active combined filter until every word is marked known."""
     state = get_custom_review_state()
     if state is None:
         flash("组合背诵范围已失效，请重新选择。", "error")
@@ -1036,26 +1192,49 @@ def custom_review_session():
 
     exclude_word_id = request.args.get("exclude_word_id", type=int)
     day_ids = state["study_day_ids"]
-    placeholders = ", ".join("?" for _ in day_ids)
+    tag_ids = state["tag_ids"]
+    favorite_only = state["favorite_only"]
     today = date.today()
     with get_db() as connection:
-        selected_days = connection.execute(
-            f"""
-            SELECT id, study_date
-            FROM study_days
-            WHERE id IN ({placeholders})
-            ORDER BY study_date ASC
-            """,
+        selected_days = []
+        if day_ids:
+            placeholders = ", ".join("?" for _ in day_ids)
+            selected_days = connection.execute(
+                f"""
+                SELECT id, study_date
+                FROM study_days
+                WHERE id IN ({placeholders})
+                ORDER BY study_date ASC
+                """,
+                day_ids,
+            ).fetchall()
+        selected_tags = []
+        if tag_ids:
+            placeholders = ", ".join("?" for _ in tag_ids)
+            selected_tags = connection.execute(
+                f"""
+                SELECT id, name
+                FROM tags
+                WHERE id IN ({placeholders})
+                ORDER BY name COLLATE NOCASE ASC
+                """,
+                tag_ids,
+            ).fetchall()
+        filter_sql, filter_parameters = build_word_filter(
             day_ids,
-        ).fetchall()
+            tag_ids,
+            favorite_only,
+        )
         selected_word_count = connection.execute(
-            f"SELECT COUNT(*) FROM words WHERE study_day_id IN ({placeholders})",
-            day_ids,
+            f"SELECT COUNT(*) FROM words WHERE {filter_sql}",
+            filter_parameters,
         ).fetchone()[0]
         candidates = get_custom_review_candidates(
             connection,
             day_ids,
             state["after_record_id"],
+            tag_ids,
+            favorite_only,
         )
         word = choose_weighted_word(
             candidates,
@@ -1063,18 +1242,27 @@ def custom_review_session():
             today=today,
         )
 
-    if not selected_days or not selected_word_count:
+    filters_still_exist = (
+        len(selected_days) == len(day_ids) and len(selected_tags) == len(tag_ids)
+    )
+    if not filters_still_exist or not selected_word_count:
         session.pop("custom_review", None)
-        flash("所选日期已经没有可以背诵的单词。", "error")
+        flash("所选组合条件已经没有可以背诵的单词。", "error")
         return redirect(url_for("custom_review_setup"))
 
+    scope_parts = []
     if len(selected_days) == 1:
-        scope_label = selected_days[0]["study_date"]
-    else:
-        scope_label = (
+        scope_parts.append(selected_days[0]["study_date"])
+    elif selected_days:
+        scope_parts.append(
             f"{len(selected_days)} 个日期 · "
             f"{selected_days[0]['study_date']} 至 {selected_days[-1]['study_date']}"
         )
+    if selected_tags:
+        scope_parts.append("标签：" + " + ".join(tag["name"] for tag in selected_tags))
+    if favorite_only:
+        scope_parts.append("仅生词簿")
+    scope_label = " · ".join(scope_parts)
 
     return render_mastery_review(
         word,
@@ -1100,22 +1288,28 @@ def save_custom_review():
         return redirect(url_for("custom_review_session"))
 
     day_ids = state["study_day_ids"]
-    placeholders = ", ".join("?" for _ in day_ids)
+    tag_ids = state["tag_ids"]
+    favorite_only = state["favorite_only"]
+    filter_sql, filter_parameters = build_word_filter(
+        day_ids,
+        tag_ids,
+        favorite_only,
+    )
     with get_db() as connection:
         word = connection.execute(
             f"""
             SELECT * FROM words
             WHERE id = ?
-              AND study_day_id IN ({placeholders})
+              AND {filter_sql}
               AND NOT EXISTS (
                   SELECT 1
                   FROM learning_records
                   WHERE learning_records.word_id = words.id
                     AND learning_records.id > ?
                     AND learning_records.result = 'known'
-              )
+            )
             """,
-            (word_id, *day_ids, state["after_record_id"]),
+            (word_id, *filter_parameters, state["after_record_id"]),
         ).fetchone()
         if word is None:
             flash("该单词当前不在组合背诵队列中。", "error")

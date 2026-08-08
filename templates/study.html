@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% if favorite_mode %}生词簿背诵{% elif custom_mode %}日期组合背诵{% else %}{{ day.study_date }} · 背诵模式{% endif %}</title>
+    <title>{% if favorite_mode %}生词簿背诵{% elif custom_mode %}组合筛选背诵{% else %}{{ day.study_date }} · 背诵模式{% endif %}</title>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -27,7 +27,7 @@
 
         <header class="study-header">
             <p class="eyebrow">SPACED REPETITION</p>
-            <h1>{% if favorite_mode %}生词簿背诵{% elif custom_mode %}日期组合背诵{% elif repeat_mode %}重新背诵{% else %}间隔复习{% endif %}</h1>
+            <h1>{% if favorite_mode %}生词簿背诵{% elif custom_mode %}组合筛选背诵{% elif repeat_mode %}重新背诵{% else %}间隔复习{% endif %}</h1>
             <p>
                 {% if favorite_mode %}
                     收藏的生词集中抽取，不会和模糊的单词会再次出现。
