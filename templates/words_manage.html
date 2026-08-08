@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>单词管理</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="page word-manager-page">
+        <nav class="study-nav">
+            <a href="{{ url_for('index') }}">← 返回主界面</a>
+            <span>跨日期搜索与编辑</span>
+        </nav>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="messages" aria-live="polite" aria-atomic="true">
+                    {% for category, message in messages %}
+                        <p class="message {{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+
+        <header class="word-manager-header">
+            <p class="eyebrow">WORD MANAGER</p>
+            <h1>单词管理</h1>
+            <p>搜索全部日期中的单词，修正释义、词组或所属日期。</p>
+        </header>
+
+        <form class="word-search-form" method="get" action="{{ url_for('word_manager') }}">
+            <label for="word-search">搜索单词</label>
+            <div class="word-search-row">
+                <input id="word-search" name="q" type="search" value="{{ query }}" placeholder="输入完整单词或部分拼写" autocomplete="off">
+                <button type="submit">搜索</button>
+                {% if query %}<a class="clear-search-link" href="{{ url_for('word_manager') }}">清除</a>{% endif %}
+            </div>
+        </form>
+
+        {% if duplicate_groups %}
+            <details class="duplicate-summary">
+                <summary>发现 {{ duplicate_groups|length }} 组跨日期重复单词</summary>
+                <div class="duplicate-list">
+                    {% for duplicate in duplicate_groups %}
+                        <a href="{{ url_for('word_manager', q=duplicate.word) }}">
+                            <strong>{{ duplicate.word }}</strong>
+                            <span>{{ duplicate.duplicate_count }} 条 · {{ duplicate.study_dates|replace(',', '、') }}</span>
+                        </a>
+                    {% endfor %}
+                </div>
+            </details>
+        {% endif %}
+
+        <section class="word-search-results">
+            <div class="word-results-heading">
+                <h2>{% if query %}“{{ query }}”的搜索结果{% else %}全部单词{% endif %}</h2>
+                <span>{{ total_results }} 条</span>
+            </div>
+
+            {% if total_results > result_limit %}
+                <p class="results-limit-note">结果较多，当前显示前 {{ result_limit }} 条，请输入更多字母缩小范围。</p>
+            {% endif %}
+
+            {% if words %}
+                <div class="word-management-list">
+                    {% for item in words %}
+                        <article class="word-management-card" id="word-{{ item.id }}">
+                            <div class="word-management-summary">
+                                <div class="managed-word-copy">
+                                    <div class="managed-word-title">
+                                        <strong>{{ item.word }}</strong>
+                                        <span class="managed-date-badge">{{ item.study_date }}</span>
+                                        {% if item.duplicate_count > 1 %}<span class="duplicate-badge">重复 {{ item.duplicate_count }} 条</span>{% endif %}
+                                    </div>
+                                    <p>{{ item.definition or '暂无释义' }}</p>
+                                    {% if item.phrases %}<small>{{ item.phrases|length }} 个词组</small>{% endif %}
+                                </div>
+                                <button
+                                    class="word-edit-toggle"
+                                    type="button"
+                                    aria-expanded="false"
+                                    aria-controls="word-edit-{{ item.id }}"
+                                    data-word-edit-toggle
+                                >编辑</button>
+                            </div>
+
+                            <form
+                                id="word-edit-{{ item.id }}"
+                                class="word-edit-form"
+                                method="post"
+                                action="{{ url_for('edit_word', word_id=item.id) }}"
+                                hidden
+                            >
+                                <input type="hidden" name="q" value="{{ query }}">
+                                <div class="word-edit-grid">
+                                    <div>
+                                        <label for="edit-word-{{ item.id }}">单词</label>
+                                        <input id="edit-word-{{ item.id }}" name="word" value="{{ item.word }}" required>
+                                    </div>
+                                    <div>
+                                        <label for="edit-day-{{ item.id }}">学习日期</label>
+                                        <select id="edit-day-{{ item.id }}" name="study_day_id" required>
+                                            {% for day in days %}
+                                                <option value="{{ day.id }}" {% if day.id == item.study_day_id %}selected{% endif %}>{{ day.study_date }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <label for="edit-meaning-{{ item.id }}">释义</label>
+                                <textarea id="edit-meaning-{{ item.id }}" name="meaning" rows="3" required>{{ item.definition }}</textarea>
+                                <label for="edit-phrases-{{ item.id }}">词组（每行一个）</label>
+                                <textarea id="edit-phrases-{{ item.id }}" name="phrases" rows="4" placeholder="每行填写一个词组">{{ item.phrases|join('\n') }}</textarea>
+                                <button class="save-word-button" type="submit">保存修改</button>
+                            </form>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <p>{% if query %}没有找到包含“{{ query }}”的单词。{% else %}还没有添加单词。{% endif %}</p>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <button id="back-to-top" class="back-to-top" type="button" aria-label="回到页面顶部" aria-hidden="true" tabindex="-1" title="回到顶部">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 10.5 12 4.5l6 6M12 5v14"></path>
+        </svg>
+        <span>顶部</span>
+    </button>
+
+    <script>
+        document.querySelectorAll('[data-word-edit-toggle]').forEach((button) => {
+            const form = document.getElementById(button.getAttribute('aria-controls'));
+            if (!form) return;
+            button.addEventListener('click', () => {
+                const willOpen = form.hidden;
+                form.hidden = !willOpen;
+                button.setAttribute('aria-expanded', String(willOpen));
+                button.textContent = willOpen ? '收起' : '编辑';
+                if (willOpen) form.querySelector('input[name="word"]')?.focus();
+            });
+        });
+    </script>
+    <script src="{{ url_for('static', filename='back_to_top.js') }}"></script>
+</body>
+</html>

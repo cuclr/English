@@ -14,6 +14,12 @@ from spaced_repetition import (
     level_label,
 )
 from remote_access import RemoteAccessManager
+from word_management import (
+    find_duplicate_groups,
+    find_same_day_conflict,
+    parse_phrases,
+    search_words,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -34,6 +40,7 @@ RATING_LABELS = {
     "known": "认识",
     "easy": "熟练",
 }
+WORD_SEARCH_LIMIT = 200
 
 
 class DatabaseConnection(sqlite3.Connection):
@@ -614,6 +621,84 @@ def date_library():
         words_by_day.setdefault(item["study_day_id"], []).append(item)
 
     return render_template("dates.html", days=days, words_by_day=words_by_day, active_day=active_day)
+
+
+@app.get("/words/manage")
+def word_manager():
+    query = request.args.get("q", "").strip()
+    with get_db() as connection:
+        days = connection.execute(
+            "SELECT id, study_date FROM study_days ORDER BY study_date DESC"
+        ).fetchall()
+        rows, total_results = search_words(connection, query, WORD_SEARCH_LIMIT)
+        duplicate_groups = find_duplicate_groups(connection)
+
+    words = [deserialize_word(row) for row in rows]
+    return render_template(
+        "words_manage.html",
+        query=query,
+        words=words,
+        total_results=total_results,
+        result_limit=WORD_SEARCH_LIMIT,
+        days=days,
+        duplicate_groups=duplicate_groups,
+    )
+
+
+@app.post("/words/<int:word_id>/edit")
+def edit_word(word_id: int):
+    return_query = request.form.get("q", "").strip()
+    redirect_url = url_for("word_manager", q=return_query)
+    word = request.form.get("word", "").strip()
+    meaning = request.form.get("meaning", "").strip()
+    phrases = parse_phrases(request.form.get("phrases", ""))
+    study_day_id = request.form.get("study_day_id", type=int)
+
+    if not word or not meaning or not study_day_id:
+        flash("请填写单词、释义并选择学习日期。", "error")
+        return redirect(redirect_url)
+
+    with get_db() as connection:
+        existing_word = connection.execute(
+            "SELECT id FROM words WHERE id = ?", (word_id,)
+        ).fetchone()
+        if existing_word is None:
+            flash("要编辑的单词不存在。", "error")
+            return redirect(redirect_url)
+
+        target_day = connection.execute(
+            "SELECT study_date FROM study_days WHERE id = ?", (study_day_id,)
+        ).fetchone()
+        if target_day is None:
+            flash("所选学习日期不存在。", "error")
+            return redirect(redirect_url)
+
+        conflict = find_same_day_conflict(connection, word_id, study_day_id, word)
+        if conflict is not None:
+            flash(
+                f"{target_day['study_date']} 已经有单词“{word}”，请避免重复保存。",
+                "error",
+            )
+            return redirect(redirect_url)
+
+        connection.execute(
+            """
+            UPDATE words
+            SET study_day_id = ?, word = ?, definition = ?, meaning = ?, phrases = ?
+            WHERE id = ?
+            """,
+            (
+                study_day_id,
+                word,
+                meaning,
+                meaning,
+                json.dumps(phrases, ensure_ascii=False),
+                word_id,
+            ),
+        )
+
+    flash(f"“{word}”已更新。", "success")
+    return redirect(redirect_url)
 
 
 @app.post("/days")
