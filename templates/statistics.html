@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>学习统计</title>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="statistics-page">
+        <nav class="study-nav">
+            <a href="{{ url_for('index') }}">← 返回每日词库</a>
+            <a href="{{ url_for('custom_review_setup') }}">专项背诵</a>
+        </nav>
+
+        <header class="statistics-header">
+            <p class="eyebrow">LEARNING INSIGHTS</p>
+            <h1>学习统计</h1>
+            <p>每一次复习都会在这里留下进度。</p>
+        </header>
+
+        <section class="statistics-summary" aria-label="学习概览">
+            <article class="stat-card stat-card-primary">
+                <span>今日复习</span>
+                <strong>{{ statistics.today.review_count }}</strong>
+                <small>次作答 · 今日正确率 {{ statistics.today.accuracy }}%</small>
+            </article>
+            <article class="stat-card">
+                <span>累计正确率</span>
+                <strong>{{ statistics.all_time.accuracy }}%</strong>
+                <small>{{ statistics.all_time.correct_count }} 次正确</small>
+            </article>
+            <article class="stat-card">
+                <span>累计错误率</span>
+                <strong>{{ statistics.all_time.error_rate }}%</strong>
+                <small>{{ statistics.all_time.wrong_count }} 次不会或模糊</small>
+            </article>
+            <article class="stat-card stat-card-accent">
+                <span>连续学习</span>
+                <strong>{{ statistics.streak_days }}</strong>
+                <small>天 · 累计学习 {{ statistics.active_day_count }} 天</small>
+            </article>
+        </section>
+
+        <section class="statistics-panel level-panel">
+            <div class="statistics-section-heading">
+                <div>
+                    <p class="eyebrow">MASTERY</p>
+                    <h2>熟练度等级分布</h2>
+                </div>
+                <span>{{ statistics.total_words }} 个单词</span>
+            </div>
+            <div class="level-distribution">
+                {% for item in statistics.level_distribution %}
+                    <div class="level-row">
+                        <div class="level-row-heading">
+                            <strong>等级 {{ item.level }} · {{ item.label }}</strong>
+                            <span>{{ item.count }} 个 · {{ item.percent }}%</span>
+                        </div>
+                        <div class="level-track" aria-label="等级 {{ item.level }} 占比 {{ item.percent }}%">
+                            <span style="width: {{ item.percent }}%"></span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="statistics-panel trend-panel">
+            <div class="statistics-section-heading trend-heading">
+                <div>
+                    <p class="eyebrow">REVIEW TREND</p>
+                    <h2>最近 {{ statistics.period_days }} 天</h2>
+                </div>
+                <div class="period-switch" aria-label="趋势时间范围">
+                    <a href="{{ url_for('learning_statistics', period=7) }}" {% if statistics.period_days == 7 %}class="is-active" aria-current="page"{% endif %}>一周</a>
+                    <a href="{{ url_for('learning_statistics', period=30) }}" {% if statistics.period_days == 30 %}class="is-active" aria-current="page"{% endif %}>一个月</a>
+                </div>
+            </div>
+
+            <div class="period-summary">
+                <span><strong>{{ statistics.period.review_count }}</strong> 次复习</span>
+                <span><strong>{{ statistics.period.accuracy }}%</strong> 正确率</span>
+                <span><strong>{{ statistics.period.wrong_count }}</strong> 次错误</span>
+            </div>
+
+            <div class="trend-scroll" tabindex="0" aria-label="每日复习趋势图，可横向滚动">
+                <div class="trend-chart {% if statistics.period_days == 30 %}trend-chart-month{% endif %}">
+                    {% for day in statistics.trend %}
+                        <div class="trend-day" title="{{ day.date }}：{{ day.review_count }} 次，正确率 {{ day.accuracy }}%">
+                            <span class="trend-count">{{ day.review_count if day.review_count else '' }}</span>
+                            <div class="trend-bar-shell">
+                                <span class="trend-bar {% if day.review_count == 0 %}is-empty{% endif %}" style="height: {{ day.bar_percent }}%"></span>
+                            </div>
+                            <small>{{ day.label if day.show_label else '' }}</small>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% if statistics.all_time.review_count == 0 %}
+                <p class="statistics-empty-note">完成第一次背诵后，这里会开始生成学习趋势。</p>
+            {% endif %}
+            <p class="statistics-note">“认识 / 熟练”计为正确，“不会 / 模糊”计为错误。复习数量按作答次数统计。</p>
+        </section>
+    </main>
+</body>
+</html>

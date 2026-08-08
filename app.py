@@ -7,6 +7,7 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 
 from backup_manager import BackupError, DatabaseBackupManager
 from book_manager import BookManager, BookManagerError
+from learning_statistics import build_learning_statistics, normalize_period
 from pdf_search import PdfSearchError, PdfSearcher
 from spaced_repetition import (
     calculate_review_update,
@@ -530,6 +531,18 @@ def index():
 def health_check():
     """Identify the local app so the Windows launcher avoids duplicate servers."""
     return {"app": "english-vocabulary", "status": "ok"}
+
+
+@app.get("/statistics")
+def learning_statistics():
+    """Show read-only learning summaries and recent review trends."""
+    period_days = normalize_period(request.args.get("period"))
+    with get_db() as connection:
+        statistics = build_learning_statistics(
+            connection,
+            period_days=period_days,
+        )
+    return render_template("statistics.html", statistics=statistics)
 
 
 @app.route("/settings")
