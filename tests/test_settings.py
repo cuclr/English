@@ -116,21 +116,26 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("const firstConfirmed = window.confirm", html)
         self.assertIn("const secondConfirmed = window.confirm", html)
 
-    def test_theme_word_surfaces_and_contrast_palettes_are_defined(self):
+    def test_theme_word_surfaces_and_balanced_palettes_are_defined(self):
         html = self.client.get("/settings").get_data(as_text=True)
         css = (
             Path(__file__).resolve().parents[1] / "static" / "style.css"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("潮汐蓝橙", html)
-        self.assertIn("紫金花园", html)
-        self.assertIn("玫瑰青瓷", html)
+        self.assertIn("静海蓝", html)
+        self.assertIn("麦穗黄", html)
+        self.assertIn("莓果红", html)
         self.assertEqual(css.count("--word-surface:"), 4)
         self.assertIn("background: var(--word-surface)", css)
         self.assertNotIn("background: #f1f4ee", css)
-        self.assertIn("#2864a8 50%, #dc7657 50%", css)
-        self.assertIn("#7055a4 50%, #c9a13d 50%", css)
-        self.assertIn("#a65370 50%, #4f9b92 50%", css)
+        self.assertIn("--green: #2f6b4f;", css)
+        self.assertIn("#2f6b4f 50%, #d8b66c 50%", css)
+        self.assertIn("#315f8a 62%, #789bb8 62%", css)
+        self.assertIn("#995a17 62%, #c4853b 62%", css)
+        self.assertIn("#994966 62%, #c37b94 62%", css)
+        self.assertNotIn("#dc7657", css)
+        self.assertNotIn("#7055a4", css)
+        self.assertNotIn("#4f9b92", css)
 
     def test_reset_progress_keeps_word_but_clears_review_state(self):
         with vocabulary_app.get_db() as connection:
